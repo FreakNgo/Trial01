@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>SKY RUNNER 3D — Low Poly Flight</title>
+<title>SKY RUNNER 3D — Open World Flight</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%;overflow:hidden;background:#0a1520;color:#e8f6ff;
@@ -20,17 +20,14 @@
   #pRight{top:16px;right:16px;text-align:right}
   .label{font-size:9px;letter-spacing:2.6px;color:#8ad4ee;font-weight:700}
   .value{font-size:27px;font-weight:800;line-height:1.05;color:#fff;
-    text-shadow:0 0 16px rgba(110,220,255,.8);margin-top:2px;transition:transform .12s ease}
-  .value.pop{transform:scale(1.14)}
+    text-shadow:0 0 16px rgba(110,220,255,.8);margin-top:2px}
+  .value.pop{transform:scale(1.14);transition:transform .12s ease}
   .value small{font-size:11px;font-weight:700;color:#8ad4ee;margin-left:3px;letter-spacing:1px}
   .sub{font-size:10px;color:#8ad4ee;letter-spacing:1.5px;margin-top:3px;font-weight:600}
-  .lives{display:flex;gap:5px;margin-top:8px;justify-content:flex-end}
-  .lives i{width:9px;height:9px;border-radius:2px;background:#ff5a7a;
-    box-shadow:0 0 10px #ff5a7a;display:block;transition:.25s}
-  .lives i.off{background:rgba(255,255,255,.13);box-shadow:none}
+  #multEl{color:#ffd35c;font-weight:800}
 
   #boostBox{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);
-    width:260px;max-width:62vw;text-align:center}
+    width:240px;max-width:55vw;text-align:center}
   #boostLabel{font-size:9px;letter-spacing:3.2px;color:#8ad4ee;font-weight:700;margin-bottom:6px}
   #boostWrap{height:9px;border-radius:99px;background:rgba(8,22,40,.75);
     border:1px solid rgba(110,220,255,.32);overflow:hidden}
@@ -39,8 +36,41 @@
     box-shadow:0 0 16px rgba(110,220,255,.9);transition:width .08s linear}
 
   #flash{position:fixed;inset:0;pointer-events:none;z-index:6;
-    background:radial-gradient(ellipse at center,rgba(255,40,60,0) 40%,rgba(255,40,60,.55) 100%);
-    opacity:0;transition:opacity .18s ease}
+    background:radial-gradient(ellipse at center,rgba(255,90,40,0) 30%,rgba(255,120,40,.7) 100%);
+    opacity:0;transition:opacity .22s ease}
+
+  /* ---------- Joystick ---------- */
+  #joyZone{position:fixed;left:26px;bottom:26px;width:150px;height:150px;
+    border-radius:50%;border:2px solid rgba(110,220,255,.4);
+    background:rgba(8,22,40,.32);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    z-index:8;touch-action:none;pointer-events:none;
+    display:flex;align-items:center;justify-content:center;
+    transition:opacity .3s ease}
+  #joyZone::before{content:'';position:absolute;inset:30%;border-radius:50%;
+    border:1px dashed rgba(110,220,255,.22)}
+  #joyKnob{width:62px;height:62px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#9af3ff,#2f9bd4 60%,#0a5a80);
+    box-shadow:0 0 22px rgba(110,220,255,.75),inset 0 -4px 8px rgba(0,0,0,.35);
+    will-change:transform;pointer-events:none}
+
+  /* ---------- Throttle ---------- */
+  #thrZone{position:fixed;right:26px;bottom:26px;width:66px;height:230px;
+    border-radius:33px;border:2px solid rgba(110,220,255,.4);
+    background:rgba(8,22,40,.32);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    z-index:8;touch-action:none;pointer-events:none;overflow:hidden;
+    transition:opacity .3s ease}
+  #thrFill{position:absolute;left:0;right:0;bottom:0;height:60%;
+    background:linear-gradient(0deg,rgba(79,227,255,.35),rgba(160,107,255,.5));
+    transition:height .04s linear}
+  #thrKnob{position:absolute;left:4px;right:4px;bottom:60%;height:14px;
+    margin-bottom:-7px;border-radius:7px;
+    background:linear-gradient(180deg,#dff6ff,#4fe3ff);
+    box-shadow:0 0 18px rgba(110,220,255,.9);transition:bottom .04s linear}
+  #thrLabel{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);
+    font-size:8px;letter-spacing:2px;color:rgba(140,220,255,.7);
+    font-weight:700;pointer-events:none;white-space:nowrap}
 
   /* ---------- Overlay ---------- */
   #overlay{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;
@@ -62,7 +92,7 @@
     transition:transform .12s ease,box-shadow .12s ease}
   button:hover{transform:translateY(-2px) scale(1.04);box-shadow:0 0 56px rgba(79,227,255,.9)}
   button:active{transform:scale(.97)}
-  .hint{font-size:11px;color:#87aec2;letter-spacing:.06em;line-height:2.2;max-width:580px}
+  .hint{font-size:11px;color:#87aec2;letter-spacing:.06em;line-height:2.2;max-width:600px}
   kbd{background:rgba(79,227,255,.12);border:1px solid rgba(79,227,255,.36);
     border-radius:6px;padding:2px 7px;font-family:inherit;font-size:10px;
     color:#c7f1ff;font-weight:700;margin:0 1px}
@@ -82,7 +112,7 @@
     <div class="label">SPEED</div>
     <div class="value"><span id="speedEl">0</span><small>KM/H</small></div>
     <div class="sub">ALT <span id="altEl">0</span> M</div>
-    <div class="lives" id="livesEl"></div>
+    <div class="sub">MULT <span id="multEl">1x</span></div>
   </div>
   <div id="boostBox">
     <div id="boostLabel">BOOST</div>
@@ -90,30 +120,32 @@
   </div>
 </div>
 
+<div id="joyZone"><div id="joyKnob"></div></div>
+<div id="thrZone">
+  <div id="thrFill"></div>
+  <div id="thrKnob"></div>
+  <div id="thrLabel">THROTTLE</div>
+</div>
+
 <div id="overlay">
   <h1 id="title">SKY RUNNER</h1>
-  <p id="subtitle">Open-world low-poly flight.<br>Fly through the gates. Explore the valleys.</p>
+  <p id="subtitle">Open-world low-poly flight.<br>Explore. Discover villages. Don't crash.</p>
   <button id="startBtn">START FLIGHT</button>
   <p class="hint">
-    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> to steer
-    &nbsp;·&nbsp; <kbd>Shift</kbd> to boost<br>
-    On touch devices: drag anywhere on screen to fly
+    Joystick (left) to steer · Throttle (right) for speed<br>
+    <kbd>Shift</kbd> for boost · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to steer · <kbd>Q</kbd><kbd>E</kbd> for throttle
   </p>
 </div>
 
 <script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
-  }
-}
+{"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
 </script>
 
 <script type="module">
 import * as THREE from 'three';
 
 /* =========================================================
-   SMALL UTILITIES
+   UTILITIES
    ========================================================= */
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const rand  = (a, b) => a + Math.random() * (b - a);
@@ -133,7 +165,7 @@ function chunkSeed(cx, cz) {
 }
 
 /* =========================================================
-   HASH / VALUE NOISE / FBM
+   HASH / NOISE / TERRAIN
    ========================================================= */
 function hash2(x, y) {
   let h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
@@ -141,48 +173,32 @@ function hash2(x, y) {
   h = h ^ (h >>> 16);
   return (h >>> 0) / 4294967296;
 }
-
 function vnoise(x, y) {
   const xi = Math.floor(x), yi = Math.floor(y);
   const xf = x - xi, yf = y - yi;
   const u = xf * xf * (3 - 2 * xf);
   const v = yf * yf * (3 - 2 * yf);
-  const a = hash2(xi, yi);
-  const b = hash2(xi + 1, yi);
-  const c = hash2(xi, yi + 1);
-  const d = hash2(xi + 1, yi + 1);
-  const ab = a + (b - a) * u;
-  const cd = c + (d - c) * u;
+  const a = hash2(xi, yi), b = hash2(xi + 1, yi);
+  const c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+  const ab = a + (b - a) * u, cd = c + (d - c) * u;
   return ab + (cd - ab) * v;
 }
-
 function fbm(x, y, oct) {
   let amp = 1, freq = 1, sum = 0, norm = 0;
   for (let i = 0; i < oct; i++) {
     sum += amp * vnoise(x * freq, y * freq);
-    norm += amp;
-    amp *= 0.5;
-    freq *= 2.0;
+    norm += amp; amp *= 0.5; freq *= 2.0;
   }
   return sum / norm;
 }
-
-/* =========================================================
-   TERRAIN HEIGHT FIELD  (mountains + lake basins)
-   ========================================================= */
 function terrainHeight(x, z) {
-  // rolling base
   const base = fbm(x * 0.0016, z * 0.0016, 5);
   let h = (base - 0.45) * 340;
-
-  // lake basins — carve flat depressions below water level
   const lake = fbm(x * 0.00075 + 137.3, z * 0.00075 + 91.7, 3);
   if (lake < 0.44) {
     const t = Math.min(1, (0.44 - lake) / 0.16);
     h = h * (1 - t) - 58 * t;
   }
-
-  // mountain ranges
   const mn = fbm(x * 0.00055 + 512.1, z * 0.00055 + 733.9, 4);
   let mask = (mn - 0.53) / 0.47;
   if (mask > 0) {
@@ -194,7 +210,7 @@ function terrainHeight(x, z) {
 }
 
 /* =========================================================
-   TERRAIN PALETTE
+   PALETTE
    ========================================================= */
 const C_MUD    = new THREE.Color(0x3e5a4a);
 const C_SAND   = new THREE.Color(0xd9c98d);
@@ -219,7 +235,7 @@ function pickColor(y, ny, out) {
 }
 
 /* =========================================================
-   RENDERER / SCENE / CAMERA
+   RENDERER / SCENE
    ========================================================= */
 const canvas   = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -227,19 +243,18 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.28;
+renderer.toneMappingExposure = 1.25;
 
-const scene  = new THREE.Scene();
+const scene = new THREE.Scene();
 const FOG_COLOR = new THREE.Color(0xbcdcf2);
-scene.fog = new THREE.Fog(FOG_COLOR, 950, 2900);
+scene.fog = new THREE.Fog(FOG_COLOR, 1000, 3000);
 
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.6, 9000);
-camera.position.set(0, 300, 20);
+camera.position.set(0, 300, 22);
 
-/* ---------- Sky dome ---------- */
+/* ---------- Sky ---------- */
 const skyMat = new THREE.ShaderMaterial({
-  side: THREE.BackSide,
-  depthWrite: false,
+  side: THREE.BackSide, depthWrite: false,
   uniforms: {
     topColor: { value: new THREE.Color(0x1e5da8) },
     midColor: { value: new THREE.Color(0xbcdcf2) },
@@ -266,88 +281,67 @@ const skyMat = new THREE.ShaderMaterial({
     }`
 });
 const skyMesh = new THREE.Mesh(new THREE.SphereGeometry(6000, 24, 16), skyMat);
-skyMesh.renderOrder = -1000;
-skyMesh.frustumCulled = false;
+skyMesh.renderOrder = -1000; skyMesh.frustumCulled = false;
 scene.add(skyMesh);
 
 /* ---------- Lights ---------- */
 const sunDir = new THREE.Vector3(0.35, 0.58, 0.74).normalize();
-
-const hemi = new THREE.HemisphereLight(0xcfe9ff, 0x46603a, 0.85);
-scene.add(hemi);
-
+scene.add(new THREE.HemisphereLight(0xcfe9ff, 0x46603a, 0.85));
 const sun = new THREE.DirectionalLight(0xfff2d6, 1.45);
 sun.position.copy(sunDir).multiplyScalar(1500);
 scene.add(sun);
-
 const fill = new THREE.DirectionalLight(0x9dc4ff, 0.35);
 fill.position.set(-0.5, 0.3, -0.8).multiplyScalar(1000);
 scene.add(fill);
 
-/* ---------- Sun glow sprite ---------- */
+/* ---------- Sun sprite ---------- */
 function makeGlowTexture() {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 256;
   const g = cv.getContext('2d');
-  const grd = g.createRadialGradient(128, 128, 0, 128, 128, 128);
-  grd.addColorStop(0,    'rgba(255,255,245,1)');
-  grd.addColorStop(0.13, 'rgba(255,248,205,0.92)');
-  grd.addColorStop(0.36, 'rgba(255,208,130,0.34)');
-  grd.addColorStop(1,    'rgba(255,160,60,0)');
-  g.fillStyle = grd;
-  g.fillRect(0, 0, 256, 256);
+  const grd = g.createRadialGradient(128,128,0,128,128,128);
+  grd.addColorStop(0,'rgba(255,255,245,1)');
+  grd.addColorStop(0.13,'rgba(255,248,205,0.92)');
+  grd.addColorStop(0.36,'rgba(255,208,130,0.34)');
+  grd.addColorStop(1,'rgba(255,160,60,0)');
+  g.fillStyle = grd; g.fillRect(0,0,256,256);
   return new THREE.CanvasTexture(cv);
 }
 const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-  map: makeGlowTexture(),
-  blending: THREE.AdditiveBlending,
-  depthWrite: false,
-  depthTest: false,
-  transparent: true
+  map: makeGlowTexture(), blending: THREE.AdditiveBlending,
+  depthWrite: false, depthTest: false, transparent: true
 }));
 sunSprite.scale.setScalar(2200);
 sunSprite.renderOrder = -900;
 scene.add(sunSprite);
 
-/* =========================================================
-   WATER PLANE
-   ========================================================= */
-const waterMat = new THREE.MeshPhongMaterial({
-  color: 0x2c7fb8,
-  specular: 0xbfe8ff,
-  shininess: 110,
-  transparent: true,
-  opacity: 0.86,
-  flatShading: true
-});
-const water = new THREE.Mesh(new THREE.PlaneGeometry(26000, 26000, 1, 1), waterMat);
+/* ---------- Water ---------- */
+const water = new THREE.Mesh(
+  new THREE.PlaneGeometry(26000, 26000, 1, 1),
+  new THREE.MeshPhongMaterial({
+    color: 0x2c7fb8, specular: 0xbfe8ff, shininess: 110,
+    transparent: true, opacity: 0.86, flatShading: true
+  })
+);
 water.rotation.x = -Math.PI / 2;
-water.position.y = 0;
-water.renderOrder = 1;
 scene.add(water);
 
 /* =========================================================
    GEOMETRY HELPERS
    ========================================================= */
 const _tmpColor = new THREE.Color();
-
 function setColor(geo, hex, variance, rng) {
   _tmpColor.set(hex);
   const v = 1 + (rng() - 0.5) * variance * 2;
-  const r = _tmpColor.r * v;
-  const g = _tmpColor.g * v;
-  const b = _tmpColor.b * v;
+  const r = _tmpColor.r * v, g = _tmpColor.g * v, b = _tmpColor.b * v;
   const n = geo.attributes.position.count;
   const arr = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
-    arr[i * 3] = r;
-    arr[i * 3 + 1] = g;
-    arr[i * 3 + 2] = b;
+    arr[i*3] = r; arr[i*3+1] = g; arr[i*3+2] = b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
   return geo;
 }
-
 function mergeGeos(geos) {
   let total = 0;
   for (const g of geos) total += g.attributes.position.count;
@@ -368,30 +362,26 @@ function mergeGeos(geos) {
 }
 
 /* =========================================================
-   CHUNK BUILDING
+   CHUNKS
    ========================================================= */
 const CHUNK_SIZE = 520;
 const CHUNK_SEG  = 14;
 const VIEW_R     = 4;
-
-const chunkMat = new THREE.MeshLambertMaterial({
-  vertexColors: true,
-  flatShading: true
-});
-
+const chunkMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 const chunkMeshes = new Map();
+const chunkVillages = new Map();
 
+/* ---------- House ---------- */
 function addHouse(geos, x, y, z, rot, rng) {
   const w  = 7 + rng() * 4;
   const d  = 8 + rng() * 4;
   const hh = 6 + rng() * 4;
-
-  const wallCol = [0xe8dcc0, 0xdfc9a8, 0xf0e4c8, 0xd8cdb4][Math.floor(rng() * 4)];
-  const roofCol = [0xa8453a, 0x8f4a3a, 0x6e4a3a, 0xb5503f][Math.floor(rng() * 4)];
+  const wallCol = [0xe8dcc0, 0xdfc9a8, 0xf0e4c8, 0xd8cdb4][Math.floor(rng()*4)];
+  const roofCol = [0xa8453a, 0x8f4a3a, 0x6e4a3a, 0xb5503f][Math.floor(rng()*4)];
 
   const body = new THREE.BoxGeometry(w, hh, d).toNonIndexed();
   setColor(body, wallCol, 0.055, rng);
-  body.translate(0, hh / 2, 0);
+  body.translate(0, hh/2, 0);
 
   const roof = new THREE.ConeGeometry(Math.max(w, d) * 0.76, hh * 0.72, 4).toNonIndexed();
   setColor(roof, roofCol, 0.06, rng);
@@ -400,79 +390,158 @@ function addHouse(geos, x, y, z, rot, rng) {
 
   const m = new THREE.Matrix4().compose(
     new THREE.Vector3(x, y, z),
-    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot),
-    new THREE.Vector3(1, 1, 1)
+    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), rot),
+    new THREE.Vector3(1,1,1)
   );
-  body.applyMatrix4(m);
-  roof.applyMatrix4(m);
+  body.applyMatrix4(m); roof.applyMatrix4(m);
   geos.push(body, roof);
 }
 
-function buildProps(cx, cz, geos) {
+/* ---------- Tower / windmill ---------- */
+function addTower(geos, x, y, z, rng) {
+  const tw = new THREE.CylinderGeometry(2.8, 3.8, 20, 6).toNonIndexed();
+  setColor(tw, 0xd4bf98, 0.08, rng);
+  tw.translate(x, y + 10, z);
+  geos.push(tw);
+
+  const roof = new THREE.ConeGeometry(4.6, 6, 6).toNonIndexed();
+  setColor(roof, 0x8a4030, 0.08, rng);
+  roof.translate(x, y + 20 + 3, z);
+  geos.push(roof);
+
+  // small window band
+  const band = new THREE.CylinderGeometry(3.4, 3.4, 1.5, 6).toNonIndexed();
+  setColor(band, 0x4a3a2e, 0.05, rng);
+  band.translate(x, y + 15, z);
+  geos.push(band);
+}
+
+/* ---------- Village ---------- */
+function addVillage(geos, villages, cx, cz, rng) {
+  const vh = terrainHeight(cx, cz);
+  if (vh < 5 || vh > 350) return;
+
+  let maxD = 0;
+  for (let a = 0; a < 8; a++) {
+    const ang = (a / 8) * Math.PI * 2;
+    const px = cx + Math.cos(ang) * 90;
+    const pz = cz + Math.sin(ang) * 90;
+    maxD = Math.max(maxD, Math.abs(terrainHeight(px, pz) - vh));
+  }
+  if (maxD > 40) return;
+
+  // central plaza
+  const plaza = new THREE.CircleGeometry(13, 8).toNonIndexed();
+  plaza.rotateX(-Math.PI / 2);
+  plaza.translate(cx, vh + 0.6, cz);
+  setColor(plaza, 0x8a6a4a, 0.1, rng);
+  geos.push(plaza);
+
+  // houses in a ring
+  const nHouses = 5 + Math.floor(rng() * 4);
+  for (let i = 0; i < nHouses; i++) {
+    const ang = (i / nHouses) * Math.PI * 2 + rng() * 0.4;
+    const rad = 24 + rng() * 26;
+    const hx = cx + Math.cos(ang) * rad;
+    const hz = cz + Math.sin(ang) * rad;
+    const hh = terrainHeight(hx, hz);
+    if (hh < 3) continue;
+    addHouse(geos, hx, hh, hz, ang + Math.PI / 2 + rng() * 0.4, rng);
+  }
+
+  // tower
+  if (rng() < 0.55) addTower(geos, cx, vh, cz, rng);
+
+  // fields (flat colored quads)
+  const nFields = 2 + Math.floor(rng() * 3);
+  for (let i = 0; i < nFields; i++) {
+    const ang = rng() * Math.PI * 2;
+    const rad = 55 + rng() * 45;
+    const fx = cx + Math.cos(ang) * rad;
+    const fz = cz + Math.sin(ang) * rad;
+    const fh = terrainHeight(fx, fz);
+    if (fh < 3 || Math.abs(fh - vh) > 22) continue;
+    const fw = 16 + rng() * 18;
+    const fd = 22 + rng() * 16;
+    const field = new THREE.PlaneGeometry(fw, fd, 1, 1).toNonIndexed();
+    field.rotateX(-Math.PI / 2);
+    field.rotateY(rng() * Math.PI);
+    field.translate(fx, fh + 0.4, fz);
+    setColor(field, [0xb5c060, 0x8a9a45, 0x9c7a45, 0xa8b854][Math.floor(rng()*4)], 0.1, rng);
+    geos.push(field);
+  }
+
+  villages.push({ x: cx, z: cz });
+}
+
+/* ---------- Props ---------- */
+function buildProps(cx, cz, geos, villages) {
   const rng = mulberry32(chunkSeed(cx, cz));
   const ox = cx * CHUNK_SIZE;
   const oz = cz * CHUNK_SIZE;
 
-  /* ---- trees ---- */
-  const treeCount = 8 + Math.floor(rng() * 13);
+  /* trees */
+  const treeCount = 10 + Math.floor(rng() * 14);
   for (let i = 0; i < treeCount; i++) {
     const x = ox + (rng() - 0.5) * CHUNK_SIZE * 0.95;
     const z = oz + (rng() - 0.5) * CHUNK_SIZE * 0.95;
     const h = terrainHeight(x, z);
-    if (h < 5 || h > 330) continue;
-
+    if (h < 5 || h > 340) continue;
     const dx = terrainHeight(x + 16, z) - terrainHeight(x - 16, z);
     const dz = terrainHeight(x, z + 16) - terrainHeight(x, z - 16);
     if (Math.hypot(dx, dz) / 32 > 0.85) continue;
 
     const s = 0.75 + rng() * 0.9;
     const trunkH = 4 * s;
-
     const trunk = new THREE.BoxGeometry(1.3 * s, trunkH, 1.3 * s).toNonIndexed();
     setColor(trunk, 0x5a4530, 0.14, rng);
-    trunk.translate(x, h + trunkH / 2, z);
+    trunk.translate(x, h + trunkH/2, z);
+    geos.push(trunk);
 
-    const leafH = 12 * s;
-    const leaf = new THREE.ConeGeometry(4.2 * s, leafH, 5).toNonIndexed();
-    setColor(leaf, 0x2f7a3a, 0.18, rng);
-    leaf.translate(x, h + trunkH + leafH / 2 - 1, z);
-
-    geos.push(trunk, leaf);
+    if (rng() < 0.6) {
+      // pine
+      const leafH = 12 * s;
+      const leaf = new THREE.ConeGeometry(4.2 * s, leafH, 5).toNonIndexed();
+      setColor(leaf, 0x2f7a3a, 0.18, rng);
+      leaf.translate(x, h + trunkH + leafH/2 - 1, z);
+      geos.push(leaf);
+    } else {
+      // round tree
+      const r = 4.5 * s;
+      const ball = new THREE.IcosahedronGeometry(r, 0).toNonIndexed();
+      setColor(ball, 0x3f8f3a, 0.16, rng);
+      ball.translate(x, h + trunkH + r * 0.7, z);
+      geos.push(ball);
+    }
   }
 
-  /* ---- villages ---- */
-  if (rng() < 0.36) {
-    const vx = ox + (rng() - 0.5) * CHUNK_SIZE * 0.55;
-    const vz = oz + (rng() - 0.5) * CHUNK_SIZE * 0.55;
-    const vh = terrainHeight(vx, vz);
+  /* rocks */
+  const rockCount = 3 + Math.floor(rng() * 5);
+  for (let i = 0; i < rockCount; i++) {
+    const x = ox + (rng() - 0.5) * CHUNK_SIZE;
+    const z = oz + (rng() - 0.5) * CHUNK_SIZE;
+    const h = terrainHeight(x, z);
+    if (h < 0) continue;
+    const s = 1 + rng() * 3;
+    const rock = new THREE.IcosahedronGeometry(s, 0).toNonIndexed();
+    setColor(rock, 0x808078, 0.15, rng);
+    rock.translate(x, h + s * 0.4, z);
+    geos.push(rock);
+  }
 
-    let maxD = 0;
-    for (let a = 0; a < 8; a++) {
-      const ang = (a / 8) * Math.PI * 2;
-      const px = vx + Math.cos(ang) * 70;
-      const pz = vz + Math.sin(ang) * 70;
-      maxD = Math.max(maxD, Math.abs(terrainHeight(px, pz) - vh));
-    }
-
-    if (vh > 6 && vh < 300 && maxD < 26) {
-      const n = 4 + Math.floor(rng() * 5);
-      for (let i = 0; i < n; i++) {
-        const ang = rng() * Math.PI * 2;
-        const rad = 14 + rng() * 72;
-        const hx = vx + Math.cos(ang) * rad;
-        const hz = vz + Math.sin(ang) * rad;
-        const hh = terrainHeight(hx, hz);
-        if (hh < 3) continue;
-        addHouse(geos, hx, hh, hz, rng() * Math.PI * 2, rng);
-      }
-    }
+  /* village */
+  if (rng() < 0.42) {
+    const vx = ox + (rng() - 0.5) * CHUNK_SIZE * 0.5;
+    const vz = oz + (rng() - 0.5) * CHUNK_SIZE * 0.5;
+    addVillage(geos, villages, vx, vz, rng);
   }
 }
 
+/* ---------- Build chunk ---------- */
 function buildChunk(cx, cz) {
   const geos = [];
+  const villages = [];
 
-  /* ---------- terrain mesh ---------- */
   const size = CHUNK_SIZE, seg = CHUNK_SEG;
   const tg = new THREE.PlaneGeometry(size, size, seg, seg);
   tg.rotateX(-Math.PI / 2);
@@ -486,7 +555,6 @@ function buildChunk(cx, cz) {
   const terrain = tg.toNonIndexed();
   tg.dispose();
 
-  /* ---------- per-face vertex colors ---------- */
   const tpos = terrain.attributes.position;
   const cnt = tpos.count;
   const colors = new Float32Array(cnt * 3);
@@ -498,65 +566,57 @@ function buildChunk(cx, cz) {
     const cx2 = tpos.getX(f + 2), cy2 = tpos.getY(f + 2), cz2 = tpos.getZ(f + 2);
 
     const avgY = (ay + by + cy2) / 3;
-
-    const e1x = bx - ax,   e1y = by - ay,   e1z = bz - az;
-    const e2x = cx2 - ax,  e2y = cy2 - ay,  e2z = cz2 - az;
+    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
+    const e2x = cx2 - ax, e2y = cy2 - ay, e2z = cz2 - az;
     let nx = e1y * e2z - e1z * e2y;
     let ny = e1z * e2x - e1x * e2z;
     let nz = e1x * e2y - e1y * e2x;
     const len = Math.hypot(nx, ny, nz) || 1;
     ny = Math.abs(ny / len);
-
     pickColor(avgY, ny, col);
-
     for (let k = 0; k < 3; k++) {
-      colors[(f + k) * 3]     = col.r;
-      colors[(f + k) * 3 + 1] = col.g;
-      colors[(f + k) * 3 + 2] = col.b;
+      colors[(f+k)*3]     = col.r;
+      colors[(f+k)*3 + 1] = col.g;
+      colors[(f+k)*3 + 2] = col.b;
     }
   }
   terrain.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geos.push(terrain);
 
-  /* ---------- props ---------- */
-  buildProps(cx, cz, geos);
+  buildProps(cx, cz, geos, villages);
 
   const merged = mergeGeos(geos);
   merged.computeBoundingSphere();
-
   const mesh = new THREE.Mesh(merged, chunkMat);
   mesh.frustumCulled = true;
-  return mesh;
+
+  return { mesh, villages };
 }
 
-/* =========================================================
-   CHUNK STREAMING
-   ========================================================= */
+/* ---------- Streaming ---------- */
 function updateChunks(px, pz, budget) {
   const ccx = Math.floor(px / CHUNK_SIZE);
   const ccz = Math.floor(pz / CHUNK_SIZE);
 
-  // remove out-of-range chunks
-  for (const [key, mesh] of chunkMeshes) {
+  for (const [key, data] of chunkMeshes) {
     const comma = key.indexOf(',');
     const cx = +key.slice(0, comma);
     const cz = +key.slice(comma + 1);
     if (Math.abs(cx - ccx) > VIEW_R + 1 || Math.abs(cz - ccz) > VIEW_R + 1) {
-      scene.remove(mesh);
-      mesh.geometry.dispose();
+      scene.remove(data.mesh);
+      data.mesh.geometry.dispose();
       chunkMeshes.delete(key);
     }
   }
 
-  // gather missing chunks sorted by distance
   const missing = [];
   const R = VIEW_R + 0.5;
   for (let dx = -VIEW_R; dx <= VIEW_R; dx++) {
     for (let dz = -VIEW_R; dz <= VIEW_R; dz++) {
-      if (dx * dx + dz * dz > R * R) continue;
+      if (dx*dx + dz*dz > R*R) continue;
       const cx = ccx + dx, cz = ccz + dz;
       const key = cx + ',' + cz;
-      if (!chunkMeshes.has(key)) missing.push({ cx, cz, d: dx * dx + dz * dz });
+      if (!chunkMeshes.has(key)) missing.push({ cx, cz, d: dx*dx + dz*dz });
     }
   }
   missing.sort((a, b) => a.d - b.d);
@@ -566,9 +626,9 @@ function updateChunks(px, pz, budget) {
     const { cx, cz } = missing[i];
     const key = cx + ',' + cz;
     if (chunkMeshes.has(key)) continue;
-    const mesh = buildChunk(cx, cz);
-    chunkMeshes.set(key, mesh);
-    scene.add(mesh);
+    const data = buildChunk(cx, cz);
+    chunkMeshes.set(key, data);
+    scene.add(data.mesh);
   }
 }
 
@@ -578,32 +638,25 @@ function updateChunks(px, pz, budget) {
 function createJet() {
   const g = new THREE.Group();
   const D = THREE.DoubleSide;
-
   const bodyMat  = new THREE.MeshLambertMaterial({ color: 0xdfe8f2, flatShading: true, side: D });
   const darkMat  = new THREE.MeshLambertMaterial({ color: 0x39424f, flatShading: true, side: D });
   const redMat   = new THREE.MeshLambertMaterial({ color: 0xe2453f, flatShading: true, side: D });
-  const glassMat = new THREE.MeshLambertMaterial({
-    color: 0x2ab8ff, flatShading: true, emissive: 0x0a2d44, side: D
-  });
+  const glassMat = new THREE.MeshLambertMaterial({ color: 0x2ab8ff, flatShading: true, emissive: 0x0a2d44, side: D });
 
-  /* --- fuselage --- */
   const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.82, 1.1, 7.4, 7), bodyMat);
   fus.rotation.x = Math.PI / 2;
   g.add(fus);
 
-  /* --- nose --- */
   const nose = new THREE.Mesh(new THREE.ConeGeometry(0.82, 3.0, 7), bodyMat);
   nose.rotation.x = -Math.PI / 2;
   nose.position.z = -5.2;
   g.add(nose);
 
-  /* --- cockpit --- */
   const cock = new THREE.Mesh(new THREE.SphereGeometry(0.72, 7, 5), glassMat);
   cock.scale.set(1, 0.86, 1.9);
   cock.position.set(0, 0.6, -1.5);
   g.add(cock);
 
-  /* --- wings (swept, low poly) --- */
   function makeWing(sign) {
     const s = new THREE.Shape();
     s.moveTo(0, 1.7);
@@ -618,33 +671,26 @@ function createJet() {
   }
   g.add(makeWing(1), makeWing(-1));
 
-  /* --- wingtip accents --- */
   [-5.6, 5.6].forEach(x => {
     const tip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.32, 2.0), redMat);
     tip.position.set(x, 0.05, 0.05);
     g.add(tip);
   });
 
-  /* --- tail fin --- */
   const fs = new THREE.Shape();
-  fs.moveTo(0, 0);
-  fs.lineTo(1.9, 0);
-  fs.lineTo(1.45, 2.5);
-  fs.lineTo(0.45, 2.5);
+  fs.moveTo(0, 0); fs.lineTo(1.9, 0); fs.lineTo(1.45, 2.5); fs.lineTo(0.45, 2.5);
   fs.closePath();
   const finGeo = new THREE.ExtrudeGeometry(fs, { depth: 0.18, bevelEnabled: false });
   finGeo.rotateY(-Math.PI / 2);
   finGeo.translate(-0.09, 0.4, 1.55);
   g.add(new THREE.Mesh(finGeo, redMat));
 
-  /* --- horizontal stabilizers --- */
   [1, -1].forEach(sgn => {
     const st = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.16, 1.1), bodyMat);
     st.position.set(sgn * 1.55, 0, 2.75);
     g.add(st);
   });
 
-  /* --- engines --- */
   [-0.95, 0.95].forEach(x => {
     const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.54, 2.4, 7), darkMat);
     eng.rotation.x = Math.PI / 2;
@@ -652,22 +698,16 @@ function createJet() {
     g.add(eng);
   });
 
-  /* --- exhaust flames --- */
   const flameMat = new THREE.MeshBasicMaterial({
-    color: 0x6fe0ff,
-    transparent: true,
-    opacity: 0.9,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    side: THREE.DoubleSide
+    color: 0x6fe0ff, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
   });
   const flames = [];
   [-0.95, 0.95].forEach(x => {
     const f = new THREE.Mesh(new THREE.ConeGeometry(0.44, 2.6, 7), flameMat);
     f.rotation.x = Math.PI / 2;
     f.position.set(x, -0.08, 4.0);
-    g.add(f);
-    flames.push(f);
+    g.add(f); flames.push(f);
   });
 
   g.userData.flames = flames;
@@ -680,78 +720,20 @@ jetGroup.rotation.order = 'YXZ';
 scene.add(jetGroup);
 
 /* =========================================================
-   RINGS (gates)
-   ========================================================= */
-const RING_COUNT = 12;
-const ringGeo = new THREE.TorusGeometry(30, 3.4, 5, 12);
-
-const ringMatNormal = new THREE.MeshLambertMaterial({
-  color: 0x7fe8ff, emissive: 0x1c7ea8, flatShading: true
-});
-const ringMatNext = new THREE.MeshLambertMaterial({
-  color: 0xffd35c, emissive: 0xa86a10, flatShading: true
-});
-
-const rings = [];
-let ringFrontZ = 0;
-
-function makeRing() {
-  const mesh = new THREE.Mesh(ringGeo, ringMatNormal);
-  scene.add(mesh);
-  return { mesh, x: 0, y: 0, z: 0, flash: 0, radius: 30 };
-}
-
-function placeRing(r, z, fromJet) {
-  r.z = z;
-  const nx = fromJet.x + rand(-650, 650);
-  const th = terrainHeight(nx, z);
-  let ny = fromJet.y + rand(-180, 180);
-  ny = clamp(ny, fromJet.y - 350, fromJet.y + 350);
-  ny = Math.max(ny, th + 110);
-  ny = Math.min(ny, 1650);
-  r.x = nx;
-  r.y = ny;
-  r.flash = 0;
-  r.mesh.position.set(r.x, r.y, r.z);
-  r.mesh.rotation.set(0, 0, 0);
-  r.mesh.scale.setScalar(1);
-}
-
-function initRings() {
-  rings.length = 0;
-  ringFrontZ = jet.pos.z - 750;
-  for (let i = 0; i < RING_COUNT; i++) {
-    const r = makeRing();
-    placeRing(r, ringFrontZ, jet.pos);
-    ringFrontZ -= rand(360, 520);
-    rings.push(r);
-  }
-}
-
-/* =========================================================
    CLOUDS
    ========================================================= */
 const cloudMat = new THREE.MeshLambertMaterial({
-  color: 0xffffff,
-  flatShading: true,
-  transparent: true,
-  opacity: 0.92
+  color: 0xffffff, flatShading: true, transparent: true, opacity: 0.92
 });
-
 function createCloudGeo() {
   const geos = [];
   const n = 4 + Math.floor(Math.random() * 3);
   for (let i = 0; i < n; i++) {
     const s = 40 + Math.random() * 55;
     const g = new THREE.IcosahedronGeometry(s, 0);
-    g.translate(
-      (Math.random() - 0.5) * 150,
-      (Math.random() - 0.5) * 45,
-      (Math.random() - 0.5) * 110
-    );
+    g.translate((Math.random()-0.5)*150, (Math.random()-0.5)*45, (Math.random()-0.5)*110);
     geos.push(g);
   }
-  // merge (positions only, no color needed)
   let total = 0;
   for (const g of geos) total += g.attributes.position.count;
   const pos = new Float32Array(total * 3);
@@ -766,47 +748,149 @@ function createCloudGeo() {
   out.computeVertexNormals();
   return out;
 }
-
 const clouds = [];
 for (let i = 0; i < 34; i++) {
   const m = new THREE.Mesh(createCloudGeo(), cloudMat);
   m.position.set(rand(-3200, 3200), rand(650, 1500), rand(-3200, 3200));
   m.scale.setScalar(rand(0.8, 2.0));
-  scene.add(m);
-  clouds.push(m);
+  scene.add(m); clouds.push(m);
+}
+
+/* =========================================================
+   EXPLOSION
+   ========================================================= */
+const MAX_SPARKS = 120;
+const sparkGeo = new THREE.BufferGeometry();
+const sparkPos = new Float32Array(MAX_SPARKS * 3);
+const sparkCol = new Float32Array(MAX_SPARKS * 3);
+sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+sparkGeo.setAttribute('color', new THREE.BufferAttribute(sparkCol, 3));
+const sparkMat = new THREE.PointsMaterial({
+  size: 5, vertexColors: true, transparent: true,
+  blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
+});
+const sparkPoints = new THREE.Points(sparkGeo, sparkMat);
+sparkPoints.frustumCulled = false;
+scene.add(sparkPoints);
+
+const sparks = [];
+for (let i = 0; i < MAX_SPARKS; i++) {
+  sparks.push({ x:0,y:0,z:0, vx:0,vy:0,vz:0, life:0, maxLife:1, r:1,g:1,b:1 });
+  sparkPos[i*3+1] = -99999;
+}
+
+const fireballMat = new THREE.MeshBasicMaterial({
+  color: 0xffaa33, transparent: true, opacity: 1,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+const fireball = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), fireballMat);
+fireball.visible = false;
+fireball.frustumCulled = false;
+scene.add(fireball);
+
+let fireballT = 0;
+
+function spawnExplosion(pos) {
+  fireball.position.copy(pos);
+  fireball.scale.setScalar(3);
+  fireballMat.opacity = 1;
+  fireball.visible = true;
+  fireballT = 0;
+
+  for (let i = 0; i < MAX_SPARKS; i++) {
+    const s = sparks[i];
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const speed = rand(30, 220);
+    s.x = pos.x; s.y = pos.y; s.z = pos.z;
+    s.vx = Math.sin(phi) * Math.cos(theta) * speed;
+    s.vy = Math.cos(phi) * speed;
+    s.vz = Math.sin(phi) * Math.sin(theta) * speed;
+    s.life = rand(0.6, 1.6);
+    s.maxLife = s.life;
+
+    // color: bright white/yellow at start
+    const c = Math.random();
+    if (c < 0.4)      { s.r = 1.0; s.g = 1.0; s.b = 0.85; }
+    else if (c < 0.75){ s.r = 1.0; s.g = 0.55; s.b = 0.15; }
+    else              { s.r = 1.0; s.g = 0.25; s.b = 0.1; }
+  }
+}
+
+function updateExplosion(dt) {
+  if (fireball.visible) {
+    fireballT += dt;
+    const t = fireballT / 0.9;
+    if (t >= 1) {
+      fireball.visible = false;
+    } else {
+      fireball.scale.setScalar(3 + t * 42);
+      fireballMat.opacity = 1 - t;
+    }
+  }
+
+  let anyAlive = false;
+  for (let i = 0; i < MAX_SPARKS; i++) {
+    const s = sparks[i];
+    if (s.life <= 0) {
+      if (sparkPos[i*3+1] > -90000) sparkPos[i*3+1] = -99999;
+      continue;
+    }
+    anyAlive = true;
+    s.life -= dt;
+    if (s.life <= 0) {
+      sparkPos[i*3+1] = -99999;
+      continue;
+    }
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    s.z += s.vz * dt;
+    s.vx *= Math.exp(-1.8 * dt);
+    s.vy *= Math.exp(-1.8 * dt);
+    s.vz *= Math.exp(-1.8 * dt);
+    s.vy -= 60 * dt;
+
+    const fade = s.life / s.maxLife;
+    const fl = 0.4 + fade * 0.6;
+    sparkPos[i*3]     = s.x;
+    sparkPos[i*3 + 1] = s.y;
+    sparkPos[i*3 + 2] = s.z;
+    sparkCol[i*3]     = s.r * fl;
+    sparkCol[i*3 + 1] = s.g * fl;
+    sparkCol[i*3 + 2] = s.b * fl;
+  }
+  if (anyAlive) {
+    sparkGeo.attributes.position.needsUpdate = true;
+    sparkGeo.attributes.color.needsUpdate = true;
+  }
 }
 
 /* =========================================================
    GAME STATE
    ========================================================= */
 const jet = {
-  pos: new THREE.Vector3(0, 300, 0),
-  vx: 0,
-  vy: 0,
-  speed: 320,
-  boost: 100,
-  lives: 3,
-  maxLives: 5,
-  invuln: 0,
-  roll: 0,
-  pitch: 0
+  pos: new THREE.Vector3(0, 320, 0),
+  yaw: 0, pitch: 0, roll: 0,
+  vy: 0, speed: 200,
+  throttle: 0.6,
+  boost: 100
 };
 
 const state = {
-  phase: 'menu',     // 'menu' | 'play' | 'over'
+  phase: 'menu',
   score: 0,
   best: Number(localStorage.getItem('skyrunner3d_best') || 0),
+  multiplier: 1,
   travel: 0,
-  prevZ: 0,
-  passed: 0,
-  combo: 1,
-  comboTimer: 0,
+  invuln: 0,
   shake: 0,
-  flashT: 0
+  exploding: false,
+  villagesFound: 0
 };
 
+const visitedVillages = new Set();
+
 const keys = Object.create(null);
-const pointer = { down: false, x: 0, y: 0 };
 
 /* =========================================================
    DOM REFS
@@ -815,7 +899,7 @@ const scoreEl  = document.getElementById('scoreEl');
 const bestEl   = document.getElementById('bestEl');
 const speedEl  = document.getElementById('speedEl');
 const altEl    = document.getElementById('altEl');
-const livesEl  = document.getElementById('livesEl');
+const multEl   = document.getElementById('multEl');
 const boostBar = document.getElementById('boostBar');
 const overlay  = document.getElementById('overlay');
 const title    = document.getElementById('title');
@@ -823,85 +907,141 @@ const subtitle = document.getElementById('subtitle');
 const startBtn = document.getElementById('startBtn');
 const flashEl  = document.getElementById('flash');
 
-let lastScore = -1, lastSpeed = -1, lastAlt = -1, lastBoost = -1, lastLives = -1, lastBest = -1;
+let lastScore = -1, lastSpeed = -1, lastAlt = -1, lastBoost = -1, lastMult = -1, lastBest = -1;
 
 function updateHUD(force) {
-  if (state.score !== lastScore || force) {
-    scoreEl.textContent = state.score;
-    lastScore = state.score;
-  }
-  if (state.best !== lastBest || force) {
-    bestEl.textContent = state.best;
-    lastBest = state.best;
-  }
+  if (state.score !== lastScore || force) { scoreEl.textContent = state.score; lastScore = state.score; }
+  if (state.best  !== lastBest  || force) { bestEl.textContent  = state.best;  lastBest  = state.best;  }
   const spd = Math.round(jet.speed * 1.9);
-  if (spd !== lastSpeed || force) {
-    speedEl.textContent = spd;
-    lastSpeed = spd;
-  }
+  if (spd !== lastSpeed || force) { speedEl.textContent = spd; lastSpeed = spd; }
   const alt = Math.max(0, Math.round(jet.pos.y));
-  if (alt !== lastAlt || force) {
-    altEl.textContent = alt;
-    lastAlt = alt;
-  }
+  if (alt !== lastAlt || force) { altEl.textContent = alt; lastAlt = alt; }
+  if (state.multiplier !== lastMult || force) { multEl.textContent = state.multiplier + 'x'; lastMult = state.multiplier; }
   const b = Math.round(jet.boost);
-  if (b !== lastBoost || force) {
-    boostBar.style.width = b + '%';
-    lastBoost = b;
-  }
-  if (jet.lives !== lastLives || force) {
-    let html = '';
-    for (let i = 0; i < jet.maxLives; i++) {
-      html += '<i class="' + (i < jet.lives ? '' : 'off') + '"></i>';
-    }
-    livesEl.innerHTML = html;
-    lastLives = jet.lives;
-  }
-}
-
-function popScore() {
-  scoreEl.classList.add('pop');
-  setTimeout(() => scoreEl.classList.remove('pop'), 130);
+  if (b !== lastBoost || force) { boostBar.style.width = b + '%'; lastBoost = b; }
 }
 
 /* =========================================================
-   INPUT
+   INPUT: JOYSTICK / THROTTLE
    ========================================================= */
+const joyEl  = document.getElementById('joyZone');
+const joyKnob = document.getElementById('joyKnob');
+const thrEl  = document.getElementById('thrZone');
+const thrFill = document.getElementById('thrFill');
+const thrKnob = document.getElementById('thrKnob');
+
+const joy = { id: null, x: 0, y: 0, cx: 0, cy: 0, radius: 55 };
+const thr = { id: null, value: 0.6 };
+
+function refreshControlRects() {
+  const jr = joyEl.getBoundingClientRect();
+  joy.cx = jr.left + jr.width / 2;
+  joy.cy = jr.top + jr.height / 2;
+  joy.radius = jr.width * 0.36;
+}
+function updateJoyKnob() {
+  joyKnob.style.transform = `translate(${joy.x * joy.radius}px, ${-joy.y * joy.radius}px)`;
+}
+function updateThrVisual() {
+  const pct = thr.value * 100;
+  thrFill.style.height = pct + '%';
+  thrKnob.style.bottom = pct + '%';
+}
+refreshControlRects();
+updateThrVisual();
+window.addEventListener('resize', refreshControlRects);
+
+window.addEventListener('pointerdown', e => {
+  if (state.phase !== 'play') return;
+  const x = e.clientX, y = e.clientY;
+
+  // Joystick hit
+  const jr = joyEl.getBoundingClientRect();
+  if (joy.id === null &&
+      x >= jr.left - 10 && x <= jr.right + 10 &&
+      y >= jr.top - 10 && y <= jr.bottom + 10) {
+    joy.id = e.pointerId;
+    const dx = x - joy.cx;
+    const dy = y - joy.cy;
+    const d = Math.hypot(dx, dy);
+    if (d > 0.001) {
+      const k = Math.min(d, joy.radius) / d;
+      joy.x = clamp(dx * k / joy.radius, -1, 1);
+      joy.y = clamp(-dy * k / joy.radius, -1, 1);
+    }
+    updateJoyKnob();
+    return;
+  }
+
+  // Throttle hit
+  const tr = thrEl.getBoundingClientRect();
+  if (thr.id === null &&
+      x >= tr.left - 14 && x <= tr.right + 14 &&
+      y >= tr.top - 10 && y <= tr.bottom + 10) {
+    thr.id = e.pointerId;
+    thr.value = clamp(1 - (y - tr.top) / tr.height, 0, 1);
+    updateThrVisual();
+  }
+}, { passive: false });
+
+window.addEventListener('pointermove', e => {
+  if (joy.id === e.pointerId) {
+    const dx = e.clientX - joy.cx;
+    const dy = e.clientY - joy.cy;
+    const d = Math.hypot(dx, dy);
+    if (d > 0.001) {
+      const k = Math.min(d, joy.radius) / d;
+      joy.x = clamp(dx * k / joy.radius, -1, 1);
+      joy.y = clamp(-dy * k / joy.radius, -1, 1);
+    }
+    updateJoyKnob();
+  }
+  if (thr.id === e.pointerId) {
+    const tr = thrEl.getBoundingClientRect();
+    thr.value = clamp(1 - (e.clientY - tr.top) / tr.height, 0, 1);
+    updateThrVisual();
+  }
+}, { passive: false });
+
+function endPointer(e) {
+  if (joy.id === e.pointerId) {
+    joy.id = null; joy.x = 0; joy.y = 0;
+    updateJoyKnob();
+  }
+  if (thr.id === e.pointerId) {
+    thr.id = null;
+  }
+}
+window.addEventListener('pointerup', endPointer);
+window.addEventListener('pointercancel', endPointer);
+
+/* ---------- Keyboard ---------- */
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   keys[k] = true;
-  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
   if ((k === ' ' || k === 'enter') && state.phase !== 'play') startGame();
 }, { passive: false });
-
-window.addEventListener('keyup', e => {
-  keys[e.key.toLowerCase()] = false;
-});
-
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 window.addEventListener('blur', () => {
   for (const k in keys) keys[k] = false;
-  pointer.down = false;
+  joy.id = null; joy.x = 0; joy.y = 0; thr.id = null;
+  updateJoyKnob();
 });
-
-canvas.addEventListener('pointerdown', e => {
-  pointer.down = true;
-  pointer.x = e.clientX;
-  pointer.y = e.clientY;
-  if (canvas.setPointerCapture) {
-    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
-  }
-});
-canvas.addEventListener('pointermove', e => {
-  if (!pointer.down) return;
-  pointer.x = e.clientX;
-  pointer.y = e.clientY;
-});
-canvas.addEventListener('pointerup',     () => { pointer.down = false; });
-canvas.addEventListener('pointercancel', () => { pointer.down = false; });
-canvas.addEventListener('pointerleave',  () => { pointer.down = false; });
-canvas.addEventListener('contextmenu', e => e.preventDefault());
 
 startBtn.addEventListener('click', startGame);
+
+function getJoystickInput() {
+  let ix = joy.x, iy = joy.y;
+  if (keys['a'] || keys['arrowleft'])  ix -= 1;
+  if (keys['d'] || keys['arrowright']) ix += 1;
+  if (keys['w'] || keys['arrowup'])    iy += 1;
+  if (keys['s'] || keys['arrowdown'])  iy -= 1;
+  ix = clamp(ix, -1, 1); iy = clamp(iy, -1, 1);
+  const m = Math.hypot(ix, iy);
+  if (m > 1) { ix /= m; iy /= m; }
+  return { x: ix, y: iy };
+}
 
 /* =========================================================
    GAME FLOW
@@ -909,27 +1049,31 @@ startBtn.addEventListener('click', startGame);
 function startGame() {
   state.phase = 'play';
   state.score = 0;
+  state.multiplier = 1;
   state.travel = 0;
-  state.passed = 0;
-  state.combo = 1;
-  state.comboTimer = 0;
+  state.invuln = 1.2;
   state.shake = 0;
+  state.exploding = false;
+  state.villagesFound = 0;
+  visitedVillages.clear();
 
-  jet.pos.set(0, Math.max(terrainHeight(0, 0), 0) + 320, 0);
-  jet.vx = 0; jet.vy = 0;
-  jet.speed = 320;
+  const th = Math.max(terrainHeight(0, 0), 0);
+  jet.pos.set(0, th + 400, 0);
+  jet.yaw = 0; jet.pitch = 0; jet.roll = 0;
+  jet.vy = 0; jet.speed = 220;
   jet.boost = 100;
-  jet.lives = 3;
-  jet.invuln = 1.5;
+  jet.throttle = 0.6;
+  thr.value = 0.6;
+  updateThrVisual();
 
-  state.prevZ = jet.pos.z;
+  jetGroup.visible = true;
 
-  // teleport existing rings ahead of the new position
-  ringFrontZ = jet.pos.z - 750;
-  for (const r of rings) {
-    placeRing(r, ringFrontZ, jet.pos);
-    ringFrontZ -= rand(360, 520);
-  }
+  // snap camera
+  camera.position.set(
+    jet.pos.x + Math.sin(jet.yaw) * 22,
+    jet.pos.y + 8,
+    jet.pos.z + Math.cos(jet.yaw) * 22
+  );
 
   overlay.classList.add('hide');
   updateHUD(true);
@@ -941,151 +1085,179 @@ function gameOver() {
     state.best = state.score;
     try { localStorage.setItem('skyrunner3d_best', String(state.best)); } catch (e) {}
   }
-  title.textContent = 'FLIGHT OVER';
+  title.textContent = 'FLIGHT ENDED';
   subtitle.innerHTML =
     `SCORE <b style="color:#4fe3ff">${state.score}</b>` +
     ` &nbsp;·&nbsp; BEST <b style="color:#ffd35c">${state.best}</b>` +
-    `<br><span style="font-size:11px;opacity:.75">Distance flown: ${(state.travel / 1000).toFixed(2)} km &nbsp;·&nbsp; Gates passed: ${state.passed}</span>`;
+    `<br><span style="font-size:11px;opacity:.75">Distance: ${(state.travel/1000).toFixed(2)} km &nbsp;·&nbsp; Villages: ${state.villagesFound}</span>`;
   startBtn.textContent = 'FLY AGAIN';
   overlay.classList.remove('hide');
   updateHUD(true);
 }
 
 function crash() {
-  if (jet.invuln > 0) return;
-  jet.lives--;
-  jet.invuln = 1.6;
-  state.shake = 26;
-  state.flashT = 1;
-  state.combo = 1;
+  if (state.exploding) return;
+  state.exploding = true;
+
+  spawnExplosion(jet.pos.clone());
+  jetGroup.visible = false;
 
   flashEl.style.opacity = '1';
-  setTimeout(() => { flashEl.style.opacity = '0'; }, 190);
+  setTimeout(() => { flashEl.style.opacity = '0'; }, 240);
 
-  // bounce back up
-  const th = Math.max(terrainHeight(jet.pos.x, jet.pos.z), 0);
-  jet.pos.y = th + 130;
-  jet.vy = 60;
-  jet.speed *= 0.55;
+  state.shake = 32;
+  state.multiplier = 1;
 
-  if (jet.lives <= 0) gameOver();
+  setTimeout(() => {
+    // respawn
+    const x = jet.pos.x + rand(-250, 250);
+    const z = jet.pos.z + rand(-250, 250);
+    const th = Math.max(terrainHeight(x, z), 0);
+    jet.pos.set(x, th + 450, z);
+    jet.yaw = jet.yaw + rand(-0.4, 0.4);
+    jet.pitch = 0; jet.roll = 0; jet.vy = 0;
+    jet.speed = 220;
+    jetGroup.visible = true;
+    state.invuln = 2.2;
+    state.exploding = false;
+
+    camera.position.set(
+      jet.pos.x + Math.sin(jet.yaw) * 22,
+      jet.pos.y + 8,
+      jet.pos.z + Math.cos(jet.yaw) * 22
+    );
+  }, 1700);
 }
 
 /* =========================================================
    UPDATE
    ========================================================= */
 function update(dt) {
-  const playing = state.phase === 'play';
+  const playing = state.phase === 'play' && !state.exploding;
 
-  /* ---------- input vector ---------- */
-  let ix = 0, iy = 0;
-  if (playing) {
-    if (keys['a'] || keys['arrowleft'])  ix -= 1;
-    if (keys['d'] || keys['arrowright']) ix += 1;
-    if (keys['w'] || keys['arrowup'])    iy += 1;
-    if (keys['s'] || keys['arrowdown'])  iy -= 1;
-
-    if (pointer.down) {
-      const px = (pointer.x - window.innerWidth / 2) / (window.innerWidth / 2);
-      const py = (pointer.y - window.innerHeight / 2) / (window.innerHeight / 2);
-      if (Math.abs(px) > 0.08) ix += clamp(px, -1, 1);
-      if (Math.abs(py) > 0.08) iy -= clamp(py, -1, 1);
+  /* ---------- throttle keys ---------- */
+  if (state.phase === 'play') {
+    if (keys['e'] || keys['+'] || keys['=']) {
+      thr.value = Math.min(1, thr.value + dt * 0.55);
+      updateThrVisual();
+    }
+    if (keys['q'] || keys['-']) {
+      thr.value = Math.max(0, thr.value - dt * 0.55);
+      updateThrVisual();
     }
   }
+  jet.throttle = thr.value;
 
-  const mag = Math.hypot(ix, iy);
-  if (mag > 1) { ix /= mag; iy /= mag; }
-
-  /* ---------- speed & boost ---------- */
-  const boosting = playing && !!keys['shift'] && jet.boost > 0.5;
-  const diffFactor = Math.min(1, state.travel / 120000);
-  const targetSpeed = (320 + 170 * diffFactor) * (boosting ? 1.6 : 1);
-
-  jet.speed += (targetSpeed - jet.speed) * (1 - Math.exp(-3.2 * dt));
-
-  if (boosting) jet.boost = Math.max(0, jet.boost - 24 * dt);
-  else          jet.boost = Math.min(100, jet.boost + 13 * dt);
-
-  /* ---------- steering (arcade) ---------- */
-  const targetVX = ix * 210;
-  const targetVY = iy * 155;
-  const k = 1 - Math.exp(-7.5 * dt);
-  jet.vx += (targetVX - jet.vx) * k;
-  jet.vy += (targetVY - jet.vy) * k;
-
+  /* ---------- flight physics ---------- */
   if (playing) {
-    jet.pos.x += jet.vx * dt;
+    const input = getJoystickInput();
+
+    const PITCH_MAX = 0.75;
+    const ROLL_MAX  = 1.15;
+    const targetPitch = input.y * PITCH_MAX;
+    const targetRoll  = input.x * ROLL_MAX;
+
+    const pk = 1 - Math.exp(-4.5 * dt);
+    const rk = 1 - Math.exp(-6.0 * dt);
+    jet.pitch += (targetPitch - jet.pitch) * pk;
+    jet.roll  += (targetRoll  - jet.roll)  * rk;
+
+    /* speed from throttle + boost */
+    const boosting = !!keys['shift'] && jet.boost > 1;
+    const targetSpeed = (140 + jet.throttle * 360) * (boosting ? 1.65 : 1);
+    jet.speed += (targetSpeed - jet.speed) * (1 - Math.exp(-2.2 * dt));
+
+    if (boosting) jet.boost = Math.max(0, jet.boost - 26 * dt);
+    else          jet.boost = Math.min(100, jet.boost + 14 * dt);
+
+    /* yaw from banked turn (positive roll = right bank = turn right) */
+    const turnAuthority = clamp(jet.speed / 280, 0.35, 1.6);
+    jet.yaw -= jet.roll * 1.55 * turnAuthority * dt;
+
+    /* vertical velocity from pitch + gravity when slow */
+    const liftLoss = Math.max(0, 1 - jet.speed / 190);
+    const targetVy = Math.sin(jet.pitch) * jet.speed * 1.5 - liftLoss * 220;
+    jet.vy += (targetVy - jet.vy) * (1 - Math.exp(-3.2 * dt));
+    jet.vy = clamp(jet.vy, -520, 520);
+
+    /* horizontal movement along yaw */
+    const horiz = jet.speed * Math.cos(jet.pitch * 0.75);
+    const fwdX = -Math.sin(jet.yaw);
+    const fwdZ = -Math.cos(jet.yaw);
+
+    jet.pos.x += fwdX * horiz * dt;
+    jet.pos.z += fwdZ * horiz * dt;
     jet.pos.y += jet.vy * dt;
-    jet.pos.z -= jet.speed * dt;
 
-    state.travel += jet.speed * dt;
-    state.score += Math.floor(jet.speed * dt * 0.055);
-  } else {
-    // gentle autopilot cruise in menu / game over
-    jet.pos.z -= 240 * dt;
-    jet.pos.x += (Math.sin(performance.now() * 0.00013) * 200 - jet.pos.x) * (1 - Math.exp(-1.2 * dt));
-    jet.pos.y += (Math.max(terrainHeight(jet.pos.x, jet.pos.z), 0) + 380 - jet.pos.y) * (1 - Math.exp(-1.2 * dt));
-    jet.vx = 0; jet.vy = 0;
-    state.travel += 240 * dt;
-  }
+    /* ceiling */
+    if (jet.pos.y > 2600) { jet.pos.y = 2600; jet.vy = Math.min(jet.vy, 0); }
 
-  /* ---------- altitude limits ---------- */
-  const ceiling = 2400;
-  if (jet.pos.y > ceiling) { jet.pos.y = ceiling; jet.vy = Math.min(jet.vy, 0); }
-
-  /* ---------- ground / water collision ---------- */
-  if (playing) {
-    if (jet.invuln > 0) jet.invuln -= dt;
-    const th = Math.max(terrainHeight(jet.pos.x, jet.pos.z), 0);
-    if (jet.pos.y < th + 16) {
+    /* terrain / water collision */
+    if (state.invuln > 0) state.invuln -= dt;
+    const groundH = Math.max(terrainHeight(jet.pos.x, jet.pos.z), 0);
+    if (jet.pos.y < groundH + 9 && state.invuln <= 0) {
       crash();
     }
+
+    /* score & travel */
+    const dist = jet.speed * dt;
+    state.travel += dist;
+    state.score += Math.floor(dist * 0.05 * state.multiplier);
+  } else if (state.phase === 'menu' || state.phase === 'over') {
+    // idle autopilot cruise for menu background
+    jet.pos.z -= 200 * dt;
+    jet.pos.x += (Math.sin(performance.now() * 0.00013) * 180 - jet.pos.x) * (1 - Math.exp(-1.2 * dt));
+    jet.pos.y += (Math.max(terrainHeight(jet.pos.x, jet.pos.z), 0) + 400 - jet.pos.y) * (1 - Math.exp(-1.2 * dt));
+    jet.pitch *= Math.exp(-2 * dt);
+    jet.roll *= Math.exp(-2 * dt);
+    jet.vy = 0;
+    state.travel += 200 * dt;
   }
 
   /* ---------- jet visuals ---------- */
-  const targetRoll  = clamp(-jet.vx / 210, -1, 1) * 0.62;
-  const targetPitch = clamp( jet.vy / 155, -1, 1) * 0.34;
-  const lerp = 1 - Math.exp(-9 * dt);
-  jet.roll  += (targetRoll  - jet.roll)  * lerp;
-  jet.pitch += (targetPitch - jet.pitch) * lerp;
-
   jetGroup.position.copy(jet.pos);
-  jetGroup.rotation.set(jet.pitch, clamp(-jet.vx / 210, -1, 1) * -0.32, jet.roll);
+  jetGroup.rotation.set(jet.pitch, jet.yaw, -jet.roll);
 
-  // flame flicker
+  const boosting = playing && !!keys['shift'] && jet.boost > 1;
   const fm = jetGroup.userData.flameMat;
-  const flen = 0.75 + Math.random() * 0.35 + (boosting ? 0.9 : 0);
-  jetGroup.userData.flames.forEach((f, i) => {
+  const flen = 0.75 + Math.random() * 0.3 + (boosting ? 1.0 : 0);
+  jetGroup.userData.flames.forEach(f => {
     f.scale.set(0.85 + Math.random() * 0.25, flen, 0.85 + Math.random() * 0.25);
   });
   fm.color.setHex(boosting ? 0xa8f0ff : 0x6fe0ff);
   fm.opacity = boosting ? 1 : 0.85;
 
   /* ---------- camera ---------- */
+  const camDist = 22;
+  const camHeight = 8;
   const camTarget = new THREE.Vector3(
-    jet.pos.x - jet.vx * 0.035,
-    jet.pos.y + 7.5 + jet.vy * 0.02,
-    jet.pos.z + 19
+    jet.pos.x + Math.sin(jet.yaw) * camDist,
+    jet.pos.y + camHeight,
+    jet.pos.z + Math.cos(jet.yaw) * camDist
   );
 
   if (state.shake > 0) {
     state.shake = Math.max(0, state.shake - dt * 55);
-    const s = state.shake * 0.22;
+    const s = state.shake * 0.25;
     camTarget.x += rand(-s, s);
     camTarget.y += rand(-s, s);
+    camTarget.z += rand(-s, s);
   }
 
-  camera.position.lerp(camTarget, 1 - Math.exp(-9 * dt));
+  camera.position.lerp(camTarget, 1 - Math.exp(-8 * dt));
 
-  const lookTarget = new THREE.Vector3(
-    jet.pos.x - jet.vx * 0.12,
-    jet.pos.y + 1.6,
-    jet.pos.z - 22
+  // look target based on actual forward direction (yaw + pitch)
+  const fwd = new THREE.Vector3(
+    -Math.sin(jet.yaw) * Math.cos(jet.pitch),
+    Math.sin(jet.pitch),
+    -Math.cos(jet.yaw) * Math.cos(jet.pitch)
   );
-  camera.lookAt(lookTarget);
-  camera.rotateZ(jet.roll * 0.22);
+  const lookAt = jet.pos.clone().addScaledVector(fwd, 30);
+  lookAt.y += 3;
+  camera.lookAt(lookAt);
+  camera.rotateZ(jet.roll * 0.14);
 
-  /* ---------- sky / sun follow camera ---------- */
+  /* ---------- sky & sun follow ---------- */
   skyMesh.position.copy(camera.position);
   sunSprite.position.copy(camera.position).addScaledVector(sunDir, 4200);
 
@@ -1106,63 +1278,32 @@ function update(dt) {
     }
   }
 
-  /* ---------- rings ---------- */
-  const prevZ = state.prevZ;
-  state.prevZ = jet.pos.z;
+  /* ---------- explosion ---------- */
+  updateExplosion(dt);
 
-  let nextRing = null;
-
-  for (const r of rings) {
-    r.mesh.position.z = r.z;
-
-    // pulse
-    const pulse = 1 + Math.sin(performance.now() * 0.004 + r.z * 0.01) * 0.03;
-    r.mesh.scale.setScalar(pulse);
-
-    if (r.flash > 0) {
-      r.flash -= dt * 2.5;
-      const s = 1 + (1 - r.flash) * 0.6;
-      r.mesh.scale.setScalar(s);
-      r.mesh.rotation.z += dt * 4;
-    }
-
-    // crossing test
-    if (playing && prevZ > r.z && jet.pos.z <= r.z) {
-      const d = Math.hypot(jet.pos.x - r.x, jet.pos.y - r.y);
-      if (d < r.radius * 1.05) {
-        const perfect = d < r.radius * 0.42;
-        const gain = Math.round((perfect ? 260 : 120) * state.combo);
-        state.score += gain;
-        state.passed++;
-        state.combo = Math.min(8, state.combo + 1);
-        state.comboTimer = 3.5;
-        r.flash = 1;
-        popScore();
-      } else {
-        state.combo = 1;
+  /* ---------- village discovery ---------- */
+  if (playing) {
+    const ccx = Math.floor(jet.pos.x / CHUNK_SIZE);
+    const ccz = Math.floor(jet.pos.z / CHUNK_SIZE);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const key = (ccx+dx) + ',' + (ccz+dz);
+        const data = chunkMeshes.get(key);
+        if (!data || !data.villages) continue;
+        for (const v of data.villages) {
+          const vkey = Math.round(v.x) + ':' + Math.round(v.z);
+          if (visitedVillages.has(vkey)) continue;
+          const ddx = jet.pos.x - v.x;
+          const ddz = jet.pos.z - v.z;
+          if (ddx*ddx + ddz*ddz < 230*230) {
+            visitedVillages.add(vkey);
+            state.villagesFound++;
+            state.multiplier = Math.min(8, state.multiplier + 1);
+            state.score += 250 * state.multiplier;
+          }
+        }
       }
     }
-
-    // recycle behind the jet
-    if (r.z > jet.pos.z + 200) {
-      ringFrontZ -= rand(360, 540);
-      placeRing(r, ringFrontZ, jet.pos);
-    }
-
-    // find next ring
-    if (r.z < jet.pos.z && (!nextRing || r.z > nextRing.z)) nextRing = r;
-  }
-
-  // combo decay
-  if (state.combo > 1) {
-    state.comboTimer -= dt;
-    if (state.comboTimer <= 0) state.combo = 1;
-  }
-
-  // highlight next ring
-  for (const r of rings) {
-    const mat = (r === nextRing) ? ringMatNext : ringMatNormal;
-    if (r.mesh.material !== mat) r.mesh.material = mat;
   }
 
   /* ---------- world streaming ---------- */
@@ -1171,13 +1312,11 @@ function update(dt) {
 }
 
 /* =========================================================
-   RENDER LOOP
+   LOOP
    ========================================================= */
 let lastTime = performance.now();
-
 function loop(now) {
   requestAnimationFrame(loop);
-
   let dt = (now - lastTime) / 1000;
   lastTime = now;
   if (!isFinite(dt) || dt <= 0) dt = 0.016;
@@ -1205,31 +1344,26 @@ window.addEventListener('resize', onResize);
 function boot() {
   onResize();
 
-  // spawn above terrain
-  jet.pos.set(0, Math.max(terrainHeight(0, 0), 0) + 320, 0);
-  state.prevZ = jet.pos.z;
+  const th = Math.max(terrainHeight(0, 0), 0);
+  jet.pos.set(0, th + 400, 0);
 
-  // build the immediate 3x3 area before showing anything
-  const ccx = 0, ccz = 0;
+  // pre-build spawn chunks
   const order = [];
   for (let dx = -1; dx <= 1; dx++)
     for (let dz = -1; dz <= 1; dz++)
-      order.push({ cx: ccx + dx, cz: ccz + dz, d: dx * dx + dz * dz });
+      order.push({ cx: dx, cz: dz, d: dx*dx + dz*dz });
   order.sort((a, b) => a.d - b.d);
-
   for (const { cx, cz } of order) {
     const key = cx + ',' + cz;
     if (!chunkMeshes.has(key)) {
-      const m = buildChunk(cx, cz);
-      chunkMeshes.set(key, m);
-      scene.add(m);
+      const data = buildChunk(cx, cz);
+      chunkMeshes.set(key, data);
+      scene.add(data.mesh);
     }
   }
 
-  initRings();
-
   subtitle.innerHTML =
-    `Open-world low-poly flight.<br>Fly through the gates. Explore the valleys.` +
+    `Open-world low-poly flight.<br>Explore. Discover villages. Don't crash.` +
     `<br><span style="font-size:11px;opacity:.8">BEST SCORE: <b style="color:#ffd35c">${state.best}</b></span>`;
 
   updateHUD(true);
@@ -1241,4 +1375,4 @@ function boot() {
 boot();
 </script>
 </body>
-  </html>
+</html>
