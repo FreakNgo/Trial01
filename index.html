@@ -3,12 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>SKY RUNNER 3D — Cities & Roads</title>
+<title>SKY RUNNER 3D — Enhanced</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%;overflow:hidden;background:#0a1520;color:#e8f6ff;
     font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;user-select:none}
   #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:4;
+    background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(0,0,0,.45) 100%)}
 
   #hud{position:fixed;inset:0;pointer-events:none;z-index:5;font-variant-numeric:tabular-nums}
   .panel{position:absolute;padding:10px 16px 12px;border-radius:14px;
@@ -42,8 +45,7 @@
     background:rgba(8,22,40,.32);
     backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
     z-index:8;touch-action:none;pointer-events:none;
-    display:flex;align-items:center;justify-content:center;
-    transition:opacity .3s ease}
+    display:flex;align-items:center;justify-content:center}
   #joyZone::before{content:'';position:absolute;inset:30%;border-radius:50%;
     border:1px dashed rgba(110,220,255,.22)}
   #joyKnob{width:62px;height:62px;border-radius:50%;
@@ -55,12 +57,11 @@
     border-radius:33px;border:2px solid rgba(110,220,255,.4);
     background:rgba(8,22,40,.32);
     backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-    z-index:8;touch-action:none;pointer-events:none;overflow:hidden;
-    transition:opacity .3s ease}
-  #thrFill{position:absolute;left:0;right:0;bottom:0;height:60%;
+    z-index:8;touch-action:none;pointer-events:none;overflow:hidden}
+  #thrFill{position:absolute;left:0;right:0;bottom:0;height:50%;
     background:linear-gradient(0deg,rgba(79,227,255,.35),rgba(160,107,255,.5));
     transition:height .04s linear}
-  #thrKnob{position:absolute;left:4px;right:4px;bottom:60%;height:14px;
+  #thrKnob{position:absolute;left:4px;right:4px;bottom:50%;height:14px;
     margin-bottom:-7px;border-radius:7px;
     background:linear-gradient(180deg,#dff6ff,#4fe3ff);
     box-shadow:0 0 18px rgba(110,220,255,.9);transition:bottom .04s linear}
@@ -95,6 +96,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="vignette"></div>
 <div id="flash"></div>
 
 <div id="hud">
@@ -188,24 +190,23 @@ function fbm(x, y, oct) {
 }
 
 /* =========================================================
-   TERRAIN + ROAD SYSTEM
+   STRAIGHT ROAD GRID + TERRAIN FLATTENING
    ========================================================= */
-const ROAD_SPACING   = 950;
-const ROAD_WIDTH     = 26;
-const ROAD_FLAT_HALF = ROAD_WIDTH * 0.5;
-const ROAD_RAISE_HALF= 46;
+const ROAD_SPACING   = 900;
+const ROAD_WIDTH     = 32;
+const ROAD_HALF_W    = ROAD_WIDTH * 0.5;
+const ROAD_FLAT_HALF = ROAD_WIDTH * 0.75;  // terrain fully flat
+const ROAD_BLEND_HALF= ROAD_WIDTH * 2.0;   // blend out to full terrain
 const ROAD_TARGET_H  = 6;
 
 function baseHeight(x, z) {
   const base = fbm(x * 0.0016, z * 0.0016, 5);
   let h = (base - 0.45) * 340;
-
   const lake = fbm(x * 0.00075 + 137.3, z * 0.00075 + 91.7, 3);
   if (lake < 0.44) {
     const t = Math.min(1, (0.44 - lake) / 0.16);
     h = h * (1 - t) - 58 * t;
   }
-
   const mn = fbm(x * 0.00055 + 512.1, z * 0.00055 + 733.9, 4);
   let mask = (mn - 0.53) / 0.47;
   if (mask > 0) {
@@ -216,51 +217,39 @@ function baseHeight(x, z) {
   return h;
 }
 
-/* returns array of {dist, axis} for nearby roads */
-function roadAt(x, z) {
-  const roads = [];
-
+function roadInfluence(x, z) {
   const kx = Math.round(x / ROAD_SPACING);
-  for (let k = kx - 1; k <= kx + 1; k++) {
-    const roadX = k * ROAD_SPACING + Math.sin(z * 0.0008 + k * 1.7) * 100;
-    const dist = Math.abs(x - roadX);
-    if (dist < ROAD_RAISE_HALF) roads.push({ dist, axis: 'z' });
-  }
-
+  const distX = Math.abs(x - kx * ROAD_SPACING);
   const kz = Math.round(z / ROAD_SPACING);
-  for (let k = kz - 1; k <= kz + 1; k++) {
-    const roadZ = k * ROAD_SPACING + Math.cos(x * 0.0008 + k * 2.3) * 100;
-    const dist = Math.abs(z - roadZ);
-    if (dist < ROAD_RAISE_HALF) roads.push({ dist, axis: 'x' });
-  }
+  const distZ = Math.abs(z - kz * ROAD_SPACING);
 
-  return roads;
+  let infl = 0;
+  if (distX < ROAD_BLEND_HALF) {
+    infl = distX < ROAD_FLAT_HALF ? 1
+         : 1 - (distX - ROAD_FLAT_HALF) / (ROAD_BLEND_HALF - ROAD_FLAT_HALF);
+  }
+  if (distZ < ROAD_BLEND_HALF) {
+    const i2 = distZ < ROAD_FLAT_HALF ? 1
+             : 1 - (distZ - ROAD_FLAT_HALF) / (ROAD_BLEND_HALF - ROAD_FLAT_HALF);
+    if (i2 > infl) infl = i2;
+  }
+  return infl;
 }
 
 function terrainHeight(x, z) {
   let h = baseHeight(x, z);
-  const roads = roadAt(x, z);
-  if (roads.length) {
-    let minDist = Infinity;
-    for (const r of roads) if (r.dist < minDist) minDist = r.dist;
-
-    let infl;
-    if (minDist < ROAD_FLAT_HALF) infl = 1;
-    else infl = 1 - (minDist - ROAD_FLAT_HALF) / (ROAD_RAISE_HALF - ROAD_FLAT_HALF);
-    infl = clamp(infl, 0, 1);
-
-    if (infl > 0 && h < ROAD_TARGET_H) {
-      h = h * (1 - infl) + ROAD_TARGET_H * infl;
-    }
+  const infl = roadInfluence(x, z);
+  if (infl > 0 && h < ROAD_TARGET_H + 30) {
+    h = h * (1 - infl) + ROAD_TARGET_H * infl;
   }
   return h;
 }
 
 function isOnRoad(x, z) {
-  const roads = roadAt(x, z);
-  for (const r of roads) {
-    if (r.dist < ROAD_FLAT_HALF * 0.92) return true;
-  }
+  const kx = Math.round(x / ROAD_SPACING);
+  if (Math.abs(x - kx * ROAD_SPACING) < ROAD_HALF_W + 1.5) return true;
+  const kz = Math.round(z / ROAD_SPACING);
+  if (Math.abs(z - kz * ROAD_SPACING) < ROAD_HALF_W + 1.5) return true;
   return false;
 }
 
@@ -275,7 +264,6 @@ const C_FOREST = new THREE.Color(0x36702d);
 const C_ROCK   = new THREE.Color(0x7a7166);
 const C_ROCK2  = new THREE.Color(0x585250);
 const C_SNOW   = new THREE.Color(0xeef5ff);
-const C_ROAD   = new THREE.Color(0x484850);
 
 function pickColor(y, ny, out) {
   if (y < -2)          out.copy(C_MUD);
@@ -291,7 +279,7 @@ function pickColor(y, ny, out) {
 }
 
 /* =========================================================
-   RENDERER / SCENE
+   RENDERER / SCENE / SKY / LIGHTS
    ========================================================= */
 const canvas   = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -299,22 +287,21 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.25;
+renderer.toneMappingExposure = 1.35;
 
 const scene = new THREE.Scene();
-const FOG_COLOR = new THREE.Color(0xbcdcf2);
-scene.fog = new THREE.Fog(FOG_COLOR, 1100, 2800);
+const FOG_COLOR = new THREE.Color(0xc0dcf0);
+scene.fog = new THREE.Fog(FOG_COLOR, 900, 2700);
 
-const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.6, 9000);
-camera.position.set(0, 300, 22);
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.6, 9000);
 
 const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false,
   uniforms: {
-    topColor: { value: new THREE.Color(0x1e5da8) },
-    midColor: { value: new THREE.Color(0xbcdcf2) },
-    botColor: { value: new THREE.Color(0x8fb8d8) },
-    exponent: { value: 0.72 }
+    topColor: { value: new THREE.Color(0x1d5aa6) },
+    midColor: { value: new THREE.Color(0xc0dcf0) },
+    botColor: { value: new THREE.Color(0x94bcd8) },
+    exponent: { value: 0.7 }
   },
   vertexShader: `
     varying vec3 vW;
@@ -340,39 +327,41 @@ skyMesh.renderOrder = -1000; skyMesh.frustumCulled = false;
 scene.add(skyMesh);
 
 const sunDir = new THREE.Vector3(0.35, 0.58, 0.74).normalize();
-scene.add(new THREE.HemisphereLight(0xcfe9ff, 0x46603a, 0.85));
-const sun = new THREE.DirectionalLight(0xfff2d6, 1.45);
+scene.add(new THREE.HemisphereLight(0xd8ecff, 0x4a6440, 0.95));
+const sun = new THREE.DirectionalLight(0xfff4dc, 1.55);
 sun.position.copy(sunDir).multiplyScalar(1500);
 scene.add(sun);
-const fill = new THREE.DirectionalLight(0x9dc4ff, 0.35);
-fill.position.set(-0.5, 0.3, -0.8).multiplyScalar(1000);
+const fill = new THREE.DirectionalLight(0x9dc4ff, 0.4);
+fill.position.set(-0.5, 0.35, -0.8).multiplyScalar(1000);
 scene.add(fill);
 
-function makeGlowTexture() {
+function makeGlowTexture(inner, mid, outer) {
   const cv = document.createElement('canvas');
-  cv.width = cv.height = 256;
+  cv.width = cv.height = 128;
   const g = cv.getContext('2d');
-  const grd = g.createRadialGradient(128,128,0,128,128,128);
-  grd.addColorStop(0,'rgba(255,255,245,1)');
-  grd.addColorStop(0.13,'rgba(255,248,205,0.92)');
-  grd.addColorStop(0.36,'rgba(255,208,130,0.34)');
-  grd.addColorStop(1,'rgba(255,160,60,0)');
-  g.fillStyle = grd; g.fillRect(0,0,256,256);
+  const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0,    inner);
+  grd.addColorStop(0.35, mid);
+  grd.addColorStop(1,    outer);
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(cv);
 }
+
 const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-  map: makeGlowTexture(), blending: THREE.AdditiveBlending,
-  depthWrite: false, depthTest: false, transparent: true
+  map: makeGlowTexture('rgba(255,255,245,1)', 'rgba(255,220,150,0.55)', 'rgba(255,160,60,0)'),
+  blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true
 }));
-sunSprite.scale.setScalar(2200);
+sunSprite.scale.setScalar(2400);
 sunSprite.renderOrder = -900;
 scene.add(sunSprite);
+
+const engineGlowTex = makeGlowTexture('rgba(200,245,255,1)', 'rgba(110,220,255,0.6)', 'rgba(50,150,255,0)');
 
 const water = new THREE.Mesh(
   new THREE.PlaneGeometry(26000, 26000, 1, 1),
   new THREE.MeshPhongMaterial({
-    color: 0x2c7fb8, specular: 0xbfe8ff, shininess: 110,
-    transparent: true, opacity: 0.86, flatShading: true
+    color: 0x2a7fb5, specular: 0xcfe8ff, shininess: 120,
+    transparent: true, opacity: 0.88, flatShading: true
   })
 );
 water.rotation.x = -Math.PI / 2;
@@ -414,64 +403,78 @@ function mergeGeos(geos) {
 }
 
 /* =========================================================
-   TREES
+   TREES (improved)
    ========================================================= */
 function addPine(geos, x, y, z, s, rng) {
   const trunkH = 4.5 * s;
-  const trunk = new THREE.CylinderGeometry(0.55 * s, 0.9 * s, trunkH, 5).toNonIndexed();
+  const trunk = new THREE.CylinderGeometry(0.5 * s, 0.85 * s, trunkH, 5).toNonIndexed();
   setColor(trunk, 0x4a3520, 0.12, rng);
   trunk.translate(x, y + trunkH / 2, z);
   geos.push(trunk);
 
-  let h0 = trunkH;
-  const baseGreen = 0x2d6e34;
+  const greens = [0x2d6e34, 0x2a6230, 0x24582a];
+  let stack = trunkH;
   for (let i = 0; i < 3; i++) {
-    const ch = 6 * s * (1 - i * 0.22);
-    const cr = (4.5 - i * 1.1) * s;
-    const cone = new THREE.ConeGeometry(cr, ch, 6).toNonIndexed();
-    setColor(cone, baseGreen, 0.16, rng);
-    cone.translate(x, y + h0 + ch / 2 - 1.4, z);
-    geos.push(cone);
-    h0 += ch * 0.65;
+    const ch = 5.8 * s * (1 - i * 0.18);
+    const cr = (4.2 - i * 0.95) * s;
+    const c = new THREE.ConeGeometry(cr, ch, 6).toNonIndexed();
+    setColor(c, greens[i], 0.10, rng);
+    c.translate(x, y + stack + ch / 2 - 1.3, z);
+    geos.push(c);
+    stack += ch * 0.55;
   }
 }
 
 function addOak(geos, x, y, z, s, rng) {
-  const trunkH = 5.5 * s;
-  const trunk = new THREE.CylinderGeometry(0.9 * s, 1.4 * s, trunkH, 5).toNonIndexed();
-  setColor(trunk, 0x5a4530, 0.12, rng);
+  const trunkH = 5.2 * s;
+  const trunk = new THREE.CylinderGeometry(0.9 * s, 1.6 * s, trunkH, 5).toNonIndexed();
+  setColor(trunk, 0x5a4530, 0.10, rng);
   trunk.translate(x, y + trunkH / 2, z);
   geos.push(trunk);
 
   const nB = 3 + Math.floor(rng() * 2);
+  const greens = [0x3d8a37, 0x357a30, 0x42862e];
   for (let i = 0; i < nB; i++) {
-    const br = (3.8 + rng() * 2.2) * s;
+    const br = (3.8 + rng() * 2.4) * s;
     const ball = new THREE.IcosahedronGeometry(br, 0).toNonIndexed();
-    setColor(ball, 0x3d8a37, 0.20, rng);
+    setColor(ball, greens[i % 3], 0.14, rng);
     ball.translate(
-      x + (rng() - 0.5) * 4 * s,
-      y + trunkH + br * 0.45 + i * 1.8 * s,
-      z + (rng() - 0.5) * 4 * s
+      x + (rng() - 0.5) * 4.5 * s,
+      y + trunkH + br * 0.35 + i * 2.2 * s,
+      z + (rng() - 0.5) * 4.5 * s
     );
     geos.push(ball);
   }
 }
 
 function addBirch(geos, x, y, z, s, rng) {
-  const trunkH = 9 * s;
+  const trunkH = 10 * s;
   const trunk = new THREE.CylinderGeometry(0.35 * s, 0.55 * s, trunkH, 5).toNonIndexed();
-  setColor(trunk, 0xeae8de, 0.06, rng);
+  setColor(trunk, 0xeae8de, 0.04, rng);
   trunk.translate(x, y + trunkH / 2, z);
   geos.push(trunk);
 
+  const spots = 4 + Math.floor(rng() * 3);
+  for (let i = 0; i < spots; i++) {
+    const sg = new THREE.BoxGeometry(0.4 * s, 0.35 * s, 0.06 * s).toNonIndexed();
+    setColor(sg, 0x2a2520, 0.1, rng);
+    const ang = rng() * Math.PI * 2;
+    sg.translate(
+      x + Math.cos(ang) * 0.48 * s,
+      y + 1.5 * s + rng() * (trunkH - 2.5 * s),
+      z + Math.sin(ang) * 0.48 * s
+    );
+    geos.push(sg);
+  }
+
   for (let i = 0; i < 4; i++) {
-    const br = (2.5 + rng() * 1.8) * s;
+    const br = (2.4 + rng() * 1.6) * s;
     const ball = new THREE.IcosahedronGeometry(br, 0).toNonIndexed();
-    setColor(ball, 0x74b84a, 0.18, rng);
+    setColor(ball, 0x78b84a, 0.13, rng);
     ball.translate(
-      x + (rng() - 0.5) * 4.5 * s,
-      y + trunkH * 0.55 + i * 2.2 * s,
-      z + (rng() - 0.5) * 4.5 * s
+      x + (rng() - 0.5) * 5 * s,
+      y + trunkH * 0.5 + i * 2.4 * s,
+      z + (rng() - 0.5) * 5 * s
     );
     geos.push(ball);
   }
@@ -485,15 +488,15 @@ function tryTree(geos, x, z, rng) {
   if (Math.hypot(dx, dz) / 32 > 0.9) return;
   if (isOnRoad(x, z)) return;
 
-  const s = 0.75 + rng() * 0.85;
+  const s = 0.8 + rng() * 0.85;
   const t = rng();
-  if (t < 0.55)      addPine(geos, x, h, z, s, rng);
-  else if (t < 0.88) addOak (geos, x, h, z, s, rng);
+  if (t < 0.58)      addPine(geos, x, h, z, s, rng);
+  else if (t < 0.90) addOak (geos, x, h, z, s, rng);
   else               addBirch(geos, x, h, z, s, rng);
 }
 
 /* =========================================================
-   HOUSES / BUILDINGS
+   HOUSES / TOWERS / VILLAGES / CITIES
    ========================================================= */
 function addHouse(geos, x, y, z, rot, rng) {
   const w  = 7 + rng() * 4;
@@ -535,9 +538,45 @@ function addTower(geos, x, y, z, rng) {
   geos.push(band);
 }
 
-/* =========================================================
-   VILLAGES (medium)
-   ========================================================= */
+function addBuilding(geos, x, y, z, w, h, d, bcol, roofCol, rng) {
+  const b = new THREE.BoxGeometry(w, h, d).toNonIndexed();
+  setColor(b, bcol, 0.045, rng);
+  b.translate(x, y + h / 2, z);
+  geos.push(b);
+
+  if (h > 18) {
+    const nWinY = Math.floor(h / 8);
+    const nWinX = Math.max(1, Math.floor(w / 6));
+
+    for (let iy = 0; iy < nWinY; iy++) {
+      for (let ix = 0; ix < nWinX; ix++) {
+        if (rng() < 0.28) continue;
+        const wg = new THREE.PlaneGeometry(2, 2.8).toNonIndexed();
+        setColor(wg, 0x1a3a5a, 0.14, rng);
+        const wx = x - w/2 + (w / nWinX) * (ix + 0.5);
+        const wy = y + h * 0.14 + (h * 0.8 / nWinY) * (iy + 0.5);
+        wg.translate(wx, wy, z + d/2 + 0.05);
+        geos.push(wg);
+      }
+      for (let ix = 0; ix < nWinX; ix++) {
+        if (rng() < 0.4) continue;
+        const wg = new THREE.PlaneGeometry(2, 2.8).toNonIndexed();
+        setColor(wg, 0x1a3a5a, 0.14, rng);
+        wg.rotateY(Math.PI);
+        const wx = x + w/2 - (w / nWinX) * (ix + 0.5);
+        const wy = y + h * 0.14 + (h * 0.8 / nWinY) * (iy + 0.5);
+        wg.translate(wx, wy, z - d/2 - 0.05);
+        geos.push(wg);
+      }
+    }
+  }
+
+  const roof = new THREE.BoxGeometry(w + 1.2, 1.6, d + 1.2).toNonIndexed();
+  setColor(roof, roofCol, 0.045, rng);
+  roof.translate(x, y + h + 0.8, z);
+  geos.push(roof);
+}
+
 function addVillage(geos, villages, cx, cz, rng) {
   const vh = terrainHeight(cx, cz);
   if (vh < 5 || vh > 330) return;
@@ -552,13 +591,11 @@ function addVillage(geos, villages, cx, cz, rng) {
   }
   if (maxD > 45) return;
 
-  // Central plaza
   const plaza = new THREE.CylinderGeometry(18, 18, 1, 8).toNonIndexed();
   setColor(plaza, 0x8a6a4a, 0.1, rng);
   plaza.translate(cx, vh + 0.6, cz);
   geos.push(plaza);
 
-  // Two rings of houses
   const inner = 4 + Math.floor(rng() * 3);
   const outer = 5 + Math.floor(rng() * 4);
   for (let i = 0; i < inner; i++) {
@@ -582,7 +619,6 @@ function addVillage(geos, villages, cx, cz, rng) {
     addHouse(geos, hx, hh, hz, ang + Math.PI / 2, rng);
   }
 
-  // Towers
   const nTowers = rng() < 0.6 ? 2 : 1;
   for (let i = 0; i < nTowers; i++) {
     const ang = rng() * Math.PI * 2;
@@ -595,7 +631,6 @@ function addVillage(geos, villages, cx, cz, rng) {
     addTower(geos, tx, th, tz, rng);
   }
 
-  // Fields
   const nFields = 3 + Math.floor(rng() * 4);
   for (let i = 0; i < nFields; i++) {
     const ang = rng() * Math.PI * 2;
@@ -618,9 +653,6 @@ function addVillage(geos, villages, cx, cz, rng) {
   villages.push({ x: cx, z: cz });
 }
 
-/* =========================================================
-   CITIES (big, at road intersections)
-   ========================================================= */
 function addCity(geos, cities, cx, cz, rng) {
   const vh = terrainHeight(cx, cz);
   if (vh < 5 || vh > 260) return;
@@ -634,14 +666,12 @@ function addCity(geos, cities, cx, cz, rng) {
   }
   if (maxD > 55) return;
 
-  // Central plaza / square
   const plaza = new THREE.CylinderGeometry(38, 38, 1.2, 10).toNonIndexed();
   setColor(plaza, 0x9a8a76, 0.06, rng);
   plaza.translate(cx, vh + 0.7, cz);
   geos.push(plaza);
 
-  // A fountain / monument
-  if (rng() < 0.6) {
+  if (rng() < 0.65) {
     const mon = new THREE.CylinderGeometry(3, 5, 14, 6).toNonIndexed();
     setColor(mon, 0xc8c0b0, 0.06, rng);
     mon.translate(cx, vh + 7, cz);
@@ -652,15 +682,14 @@ function addCity(geos, cities, cx, cz, rng) {
     geos.push(tip);
   }
 
-  // Building grid
   const gridN = 3;
   const spacing = 62;
   for (let i = -gridN; i <= gridN; i++) {
     for (let j = -gridN; j <= gridN; j++) {
       const dist = Math.hypot(i, j);
       if (dist > gridN + 0.3) continue;
-      if (i === 0 && j === 0) continue; // central plaza
-      if (rng() < 0.15) continue;       // some empty lots (parks)
+      if (i === 0 && j === 0) continue;
+      if (rng() < 0.13) continue;
 
       const bx = cx + i * spacing + (rng() - 0.5) * 10;
       const bz = cz + j * spacing + (rng() - 0.5) * 10;
@@ -669,8 +698,8 @@ function addCity(geos, cities, cx, cz, rng) {
       if (isOnRoad(bx, bz)) continue;
 
       const centrality = 1 - dist / (gridN + 1);
-      const heightMul = 0.6 + centrality * 2.6;
-      const h = (11 + rng() * 16) * heightMul;
+      const hMul = 0.6 + centrality * 2.4;
+      const h = (11 + rng() * 16) * hMul;
       const w = 20 + rng() * 12;
       const d = 20 + rng() * 12;
 
@@ -687,21 +716,11 @@ function addCity(geos, cities, cx, cz, rng) {
         roofCol = 0x7a5040;
       }
 
-      const b = new THREE.BoxGeometry(w, h, d).toNonIndexed();
-      setColor(b, bcol, 0.06, rng);
-      b.translate(bx, bh + h / 2, bz);
-      geos.push(b);
-
-      // Roof cap
-      const roof = new THREE.BoxGeometry(w + 1, 1.6, d + 1).toNonIndexed();
-      setColor(roof, roofCol, 0.05, rng);
-      roof.translate(bx, bh + h + 0.8, bz);
-      geos.push(roof);
+      addBuilding(geos, bx, bh, bz, w, h, d, bcol, roofCol, rng);
     }
   }
 
-  // Street trees in empty lots (adds greenery)
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 10; i++) {
     const ang = rng() * Math.PI * 2;
     const rad = 90 + rng() * 70;
     const tx = cx + Math.cos(ang) * rad;
@@ -716,20 +735,65 @@ function addCity(geos, cities, cx, cz, rng) {
 }
 
 /* =========================================================
-   BRIDGES (pillars over water)
+   ROAD MESHES + BRIDGES
    ========================================================= */
+function addRoads(cx, cz, geos, rng) {
+  const ox = cx * CHUNK_SIZE;
+  const oz = cz * CHUNK_SIZE;
+  const cxm = ox + CHUNK_SIZE * 0.5;
+  const czm = oz + CHUNK_SIZE * 0.5;
+
+  // Z-roads
+  const kxMin = Math.floor(ox / ROAD_SPACING) - 1;
+  const kxMax = Math.ceil((ox + CHUNK_SIZE) / ROAD_SPACING) + 1;
+  for (let k = kxMin; k <= kxMax; k++) {
+    const roadX = k * ROAD_SPACING;
+    if (roadX < ox || roadX >= ox + CHUNK_SIZE) continue;
+
+    const th1 = terrainHeight(roadX, oz);
+    const th2 = terrainHeight(roadX, czm);
+    const th3 = terrainHeight(roadX, oz + CHUNK_SIZE);
+    if (Math.max(th1, th2, th3) > ROAD_TARGET_H + 3) continue;
+
+    const g = new THREE.PlaneGeometry(ROAD_WIDTH, CHUNK_SIZE).toNonIndexed();
+    g.rotateX(-Math.PI / 2);
+    g.translate(roadX, ROAD_TARGET_H + 0.35, czm);
+    setColor(g, 0x36363d, 0.05, rng);
+    geos.push(g);
+  }
+
+  // X-roads
+  const kzMin = Math.floor(oz / ROAD_SPACING) - 1;
+  const kzMax = Math.ceil((oz + CHUNK_SIZE) / ROAD_SPACING) + 1;
+  for (let k = kzMin; k <= kzMax; k++) {
+    const roadZ = k * ROAD_SPACING;
+    if (roadZ < oz || roadZ >= oz + CHUNK_SIZE) continue;
+
+    const th1 = terrainHeight(ox, roadZ);
+    const th2 = terrainHeight(cxm, roadZ);
+    const th3 = terrainHeight(ox + CHUNK_SIZE, roadZ);
+    if (Math.max(th1, th2, th3) > ROAD_TARGET_H + 3) continue;
+
+    const g = new THREE.PlaneGeometry(CHUNK_SIZE, ROAD_WIDTH).toNonIndexed();
+    g.rotateX(-Math.PI / 2);
+    g.translate(cxm, ROAD_TARGET_H + 0.42, roadZ);
+    setColor(g, 0x36363d, 0.05, rng);
+    geos.push(g);
+  }
+}
+
 function addBridges(cx, cz, geos, rng) {
   const ox = cx * CHUNK_SIZE;
   const oz = cz * CHUNK_SIZE;
-  const halfSize = CHUNK_SIZE / 2;
+  const half = CHUNK_SIZE * 0.5;
 
-  // Z-axis roads
-  const kxMin = Math.floor((ox - halfSize) / ROAD_SPACING) - 1;
-  const kxMax = Math.ceil((ox + halfSize) / ROAD_SPACING) + 1;
+  // Z-road pillars
+  const kxMin = Math.floor((ox - half) / ROAD_SPACING) - 1;
+  const kxMax = Math.ceil((ox + half) / ROAD_SPACING) + 1;
   for (let k = kxMin; k <= kxMax; k++) {
-    for (let z = oz - halfSize + 30; z < oz + halfSize - 30; z += 70) {
-      const roadX = k * ROAD_SPACING + Math.sin(z * 0.0008 + k * 1.7) * 100;
-      if (roadX < ox - halfSize + 15 || roadX > ox + halfSize - 15) continue;
+    const roadX = k * ROAD_SPACING;
+    if (roadX < ox || roadX >= ox + CHUNK_SIZE) continue;
+    for (let z = oz + 40; z < oz + CHUNK_SIZE - 20; z += 80) {
       const bh = baseHeight(roadX, z);
       if (bh < -3) {
         const h = ROAD_TARGET_H - bh + 2;
@@ -741,13 +805,13 @@ function addBridges(cx, cz, geos, rng) {
     }
   }
 
-  // X-axis roads
-  const kzMin = Math.floor((oz - halfSize) / ROAD_SPACING) - 1;
-  const kzMax = Math.ceil((oz + halfSize) / ROAD_SPACING) + 1;
+  // X-road pillars
+  const kzMin = Math.floor((oz - half) / ROAD_SPACING) - 1;
+  const kzMax = Math.ceil((oz + half) / ROAD_SPACING) + 1;
   for (let k = kzMin; k <= kzMax; k++) {
-    for (let x = ox - halfSize + 30; x < ox + halfSize - 30; x += 70) {
-      const roadZ = k * ROAD_SPACING + Math.cos(x * 0.0008 + k * 2.3) * 100;
-      if (roadZ < oz - halfSize + 15 || roadZ > oz + halfSize - 15) continue;
+    const roadZ = k * ROAD_SPACING;
+    if (roadZ < oz || roadZ >= oz + CHUNK_SIZE) continue;
+    for (let x = ox + 40; x < ox + CHUNK_SIZE - 20; x += 80) {
       const bh = baseHeight(x, roadZ);
       if (bh < -3) {
         const h = ROAD_TARGET_H - bh + 2;
@@ -761,50 +825,10 @@ function addBridges(cx, cz, geos, rng) {
 }
 
 /* =========================================================
-   CITY PLACEMENT (at road intersections)
-   ========================================================= */
-function tryPlaceCity(geos, cities, cx, cz, rng) {
-  const ox = cx * CHUNK_SIZE;
-  const oz = cz * CHUNK_SIZE;
-  const halfSize = CHUNK_SIZE / 2;
-
-  const kxMin = Math.floor((ox - halfSize) / ROAD_SPACING);
-  const kxMax = Math.ceil((ox + halfSize) / ROAD_SPACING);
-  const kzMin = Math.floor((oz - halfSize) / ROAD_SPACING);
-  const kzMax = Math.ceil((oz + halfSize) / ROAD_SPACING);
-
-  const candidates = [];
-  for (let kx = kxMin; kx <= kxMax; kx++) {
-    for (let kz = kzMin; kz <= kzMax; kz++) {
-      let x = kx * ROAD_SPACING;
-      let z = kz * ROAD_SPACING;
-      for (let iter = 0; iter < 3; iter++) {
-        x = kx * ROAD_SPACING + Math.sin(z * 0.0008 + kx * 1.7) * 100;
-        z = kz * ROAD_SPACING + Math.cos(x * 0.0008 + kz * 2.3) * 100;
-      }
-      if (x < ox - halfSize || x > ox + halfSize) continue;
-      if (z < oz - halfSize || z > oz + halfSize) continue;
-      // Only the primary chunk handles this intersection
-      if (Math.floor(x / CHUNK_SIZE) !== cx) continue;
-      if (Math.floor(z / CHUNK_SIZE) !== cz) continue;
-      candidates.push({ x, z });
-    }
-  }
-
-  if (candidates.length === 0) return;
-
-  // Only place if random passes
-  if (rng() > 0.55) return;
-
-  const pick = candidates[Math.floor(rng() * candidates.length)];
-  addCity(geos, cities, pick.x, pick.z, rng);
-}
-
-/* =========================================================
    CHUNK BUILDING
    ========================================================= */
 const CHUNK_SIZE = 520;
-const CHUNK_SEG  = 24;
+const CHUNK_SEG  = 22;
 const VIEW_R     = 4;
 
 const chunkMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
@@ -815,15 +839,16 @@ function buildProps(cx, cz, geos, villages, cities) {
   const ox = cx * CHUNK_SIZE;
   const oz = cz * CHUNK_SIZE;
 
-  // Trees
-  const treeCount = 14 + Math.floor(rng() * 12);
+  addRoads(cx, cz, geos, rng);
+  addBridges(cx, cz, geos, rng);
+
+  const treeCount = 12 + Math.floor(rng() * 10);
   for (let i = 0; i < treeCount; i++) {
     const x = ox + (rng() - 0.5) * CHUNK_SIZE * 0.96;
     const z = oz + (rng() - 0.5) * CHUNK_SIZE * 0.96;
     tryTree(geos, x, z, rng);
   }
 
-  // Rocks
   const rockCount = 3 + Math.floor(rng() * 5);
   for (let i = 0; i < rockCount; i++) {
     const x = ox + (rng() - 0.5) * CHUNK_SIZE;
@@ -838,16 +863,20 @@ function buildProps(cx, cz, geos, villages, cities) {
     geos.push(rock);
   }
 
-  // Bridges
-  addBridges(cx, cz, geos, rng);
+  // City at road intersection
+  if (rng() < 0.55) {
+    const kx = Math.round((ox + CHUNK_SIZE * 0.5) / ROAD_SPACING);
+    const kz = Math.round((oz + CHUNK_SIZE * 0.5) / ROAD_SPACING);
+    const cxw = kx * ROAD_SPACING;
+    const czw = kz * ROAD_SPACING;
+    if (cxw >= ox && cxw < ox + CHUNK_SIZE && czw >= oz && czw < oz + CHUNK_SIZE) {
+      addCity(geos, cities, cxw, czw, rng);
+    }
+  }
 
-  // City (at road intersection)
-  tryPlaceCity(geos, cities, cx, cz, rng);
-
-  // Village
   if (rng() < 0.42) {
-    const vx = ox + (rng() - 0.5) * CHUNK_SIZE * 0.5;
-    const vz = oz + (rng() - 0.5) * CHUNK_SIZE * 0.5;
+    const vx = ox + (rng() - 0.5) * CHUNK_SIZE * 0.55;
+    const vz = oz + (rng() - 0.5) * CHUNK_SIZE * 0.55;
     addVillage(geos, villages, vx, vz, rng);
   }
 }
@@ -881,9 +910,6 @@ function buildChunk(cx, cz) {
     const cx2 = tpos.getX(f + 2), cy2 = tpos.getY(f + 2), cz2 = tpos.getZ(f + 2);
 
     const avgY = (ay + by + cy2) / 3;
-    const faceCx = (ax + bx + cx2) / 3;
-    const faceCz = (az + bz + cz2) / 3;
-
     const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
     const e2x = cx2 - ax, e2y = cy2 - ay, e2z = cz2 - az;
     let nx = e1y * e2z - e1z * e2y;
@@ -891,15 +917,7 @@ function buildChunk(cx, cz) {
     let nz = e1x * e2y - e1y * e2x;
     const len = Math.hypot(nx, ny, nz) || 1;
     ny = Math.abs(ny / len);
-
-    if (isOnRoad(faceCx, faceCz)) {
-      const v = 0.9 + Math.random() * 0.18;
-      col.copy(C_ROAD);
-      col.r *= v; col.g *= v; col.b *= v;
-    } else {
-      pickColor(avgY, ny, col);
-    }
-
+    pickColor(avgY, ny, col);
     for (let k = 0; k < 3; k++) {
       colors[(f+k)*3]     = col.r;
       colors[(f+k)*3 + 1] = col.g;
@@ -961,104 +979,168 @@ function updateChunks(px, pz, budget) {
 }
 
 /* =========================================================
-   JET MODEL
+   JET MODEL (detailed)
    ========================================================= */
 function createJet() {
   const g = new THREE.Group();
   const D = THREE.DoubleSide;
-  const bodyMat  = new THREE.MeshLambertMaterial({ color: 0xdfe8f2, flatShading: true, side: D });
-  const darkMat  = new THREE.MeshLambertMaterial({ color: 0x39424f, flatShading: true, side: D });
-  const redMat   = new THREE.MeshLambertMaterial({ color: 0xe2453f, flatShading: true, side: D });
-  const glassMat = new THREE.MeshLambertMaterial({ color: 0x2ab8ff, flatShading: true, emissive: 0x0a2d44, side: D });
 
-  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.82, 1.1, 7.4, 7), bodyMat);
+  const whiteMat = new THREE.MeshLambertMaterial({ color: 0xe8eef4, flatShading: true, side: D });
+  const grayMat  = new THREE.MeshLambertMaterial({ color: 0x6a7a8a, flatShading: true, side: D });
+  const darkMat  = new THREE.MeshLambertMaterial({ color: 0x3a4552, flatShading: true, side: D });
+  const redMat   = new THREE.MeshLambertMaterial({ color: 0xd83030, flatShading: true, side: D });
+  const blueMat  = new THREE.MeshLambertMaterial({ color: 0x2a6aaa, flatShading: true, side: D });
+  const glassMat = new THREE.MeshLambertMaterial({ color: 0x1a9ad8, emissive: 0x082838, flatShading: true, side: D });
+
+  const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.0, 9, 8), whiteMat);
   fus.rotation.x = Math.PI / 2;
   g.add(fus);
 
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.82, 3.0, 7), bodyMat);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.85, 3.5, 8), whiteMat);
   nose.rotation.x = -Math.PI / 2;
-  nose.position.z = -5.2;
+  nose.position.z = -6.25;
   g.add(nose);
 
-  const cock = new THREE.Mesh(new THREE.SphereGeometry(0.72, 7, 5), glassMat);
-  cock.scale.set(1, 0.86, 1.9);
-  cock.position.set(0, 0.6, -1.5);
+  const noseTip = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.8, 8), darkMat);
+  noseTip.rotation.x = -Math.PI / 2;
+  noseTip.position.z = -7.85;
+  g.add(noseTip);
+
+  const cock = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), glassMat);
+  cock.scale.set(1, 0.85, 2.0);
+  cock.position.set(0, 0.5, -1.5);
   g.add(cock);
 
   function makeWing(sign) {
-    const s = new THREE.Shape();
-    s.moveTo(0, 1.7);
-    s.lineTo(sign * 5.6, 1.0);
-    s.lineTo(sign * 5.6, -0.9);
-    s.lineTo(0, -1.5);
-    s.closePath();
-    const geo = new THREE.ExtrudeGeometry(s, { depth: 0.22, bevelEnabled: false });
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 2.5);
+    shape.lineTo(sign * 5.5, 0.8);
+    shape.lineTo(sign * 5.5, -0.5);
+    shape.lineTo(sign * 3.5, -1.2);
+    shape.lineTo(0, -2.0);
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.3, bevelEnabled: false });
     geo.rotateX(-Math.PI / 2);
-    geo.translate(0, -0.11, 0);
-    return new THREE.Mesh(geo, bodyMat);
+    geo.translate(0, -0.15, 0);
+    return geo;
   }
-  g.add(makeWing(1), makeWing(-1));
+  g.add(new THREE.Mesh(makeWing(1), whiteMat));
+  g.add(new THREE.Mesh(makeWing(-1), whiteMat));
 
-  [-5.6, 5.6].forEach(x => {
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.32, 2.0), redMat);
-    tip.position.set(x, 0.05, 0.05);
+  [1, -1].forEach(sign => {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.32, 4.5), redMat);
+    stripe.position.set(sign * 3.5, 0.02, 0.5);
+    g.add(stripe);
+  });
+
+  [1, -1].forEach(sign => {
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.4, 1.5), blueMat);
+    tip.position.set(sign * 5.5, 0, 0.3);
     g.add(tip);
   });
 
-  const fs = new THREE.Shape();
-  fs.moveTo(0, 0); fs.lineTo(1.9, 0); fs.lineTo(1.45, 2.5); fs.lineTo(0.45, 2.5);
-  fs.closePath();
-  const finGeo = new THREE.ExtrudeGeometry(fs, { depth: 0.18, bevelEnabled: false });
+  const finShape = new THREE.Shape();
+  finShape.moveTo(0, 0);
+  finShape.lineTo(0.3, 2.8);
+  finShape.lineTo(1.8, 2.6);
+  finShape.lineTo(2.0, 0.2);
+  finShape.closePath();
+  const finGeo = new THREE.ExtrudeGeometry(finShape, { depth: 0.18, bevelEnabled: false });
   finGeo.rotateY(-Math.PI / 2);
-  finGeo.translate(-0.09, 0.4, 1.55);
+  finGeo.translate(-0.09, 0.4, 2.8);
   g.add(new THREE.Mesh(finGeo, redMat));
 
-  [1, -1].forEach(sgn => {
-    const st = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.16, 1.1), bodyMat);
-    st.position.set(sgn * 1.55, 0, 2.75);
-    g.add(st);
+  [1, -1].forEach(sign => {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0.7);
+    shape.lineTo(sign * 2.2, 0.3);
+    shape.lineTo(sign * 2.2, -0.3);
+    shape.lineTo(0, -0.7);
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.16, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(0, -0.08, 3.5);
+    g.add(new THREE.Mesh(geo, whiteMat));
   });
 
-  [-0.95, 0.95].forEach(x => {
-    const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.54, 2.4, 7), darkMat);
+  [1, -1].forEach(sign => {
+    const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 2.4, 8), darkMat);
     eng.rotation.x = Math.PI / 2;
-    eng.position.set(x, -0.08, 2.25);
+    eng.position.set(sign * 1.0, -0.05, 2.5);
     g.add(eng);
+
+    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.5, 0.3, 8), grayMat);
+    nozzle.rotation.x = Math.PI / 2;
+    nozzle.position.set(sign * 1.0, -0.05, 3.8);
+    g.add(nozzle);
   });
+
+  const navRed = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 4),
+    new THREE.MeshBasicMaterial({ color: 0xff2020 }));
+  navRed.position.set(-5.5, 0.1, 0.3);
+  g.add(navRed);
+
+  const navGreen = new THREE.Mesh(new THREE.SphereGeometry(0.18, 5, 4),
+    new THREE.MeshBasicMaterial({ color: 0x20ff20 }));
+  navGreen.position.set(5.5, 0.1, 0.3);
+  g.add(navGreen);
 
   const flameMat = new THREE.MeshBasicMaterial({
     color: 0x6fe0ff, transparent: true, opacity: 0.9,
     blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
   });
   const flames = [];
-  [-0.95, 0.95].forEach(x => {
-    const f = new THREE.Mesh(new THREE.ConeGeometry(0.44, 2.6, 7), flameMat);
+  [1, -1].forEach(sign => {
+    const f = new THREE.Mesh(new THREE.ConeGeometry(0.5, 3, 8), flameMat);
     f.rotation.x = Math.PI / 2;
-    f.position.set(x, -0.08, 4.0);
-    g.add(f); flames.push(f);
+    f.position.set(sign * 1.0, -0.05, 4.5);
+    g.add(f);
+    flames.push(f);
   });
+
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: engineGlowTex, color: 0x6fe0ff,
+    transparent: true, blending: THREE.AdditiveBlending,
+    depthWrite: false, sizeAttenuation: true
+  }));
+  glow.scale.setScalar(6);
+  glow.position.set(0, -0.05, 4.8);
+  g.add(glow);
 
   g.userData.flames = flames;
   g.userData.flameMat = flameMat;
+  g.userData.glow = glow;
   return g;
 }
+
 const jetGroup = createJet();
 jetGroup.rotation.order = 'YXZ';
 scene.add(jetGroup);
+
+/* ---------- Jet shadow ---------- */
+const jetShadow = new THREE.Mesh(
+  new THREE.CircleGeometry(6, 16),
+  new THREE.MeshBasicMaterial({
+    color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false
+  })
+);
+jetShadow.rotation.x = -Math.PI / 2;
+jetShadow.visible = false;
+scene.add(jetShadow);
 
 /* =========================================================
    CLOUDS
    ========================================================= */
 const cloudMat = new THREE.MeshLambertMaterial({
-  color: 0xffffff, flatShading: true, transparent: true, opacity: 0.92
+  color: 0xffffff, flatShading: true, transparent: true, opacity: 0.94
 });
 function createCloudGeo() {
   const geos = [];
-  const n = 4 + Math.floor(Math.random() * 3);
+  const n = 5 + Math.floor(Math.random() * 3);
   for (let i = 0; i < n; i++) {
-    const s = 40 + Math.random() * 55;
+    const s = 38 + Math.random() * 55;
     const g = new THREE.IcosahedronGeometry(s, 0);
-    g.translate((Math.random()-0.5)*150, (Math.random()-0.5)*45, (Math.random()-0.5)*110);
+    g.translate((Math.random()-0.5)*170, (Math.random()-0.5)*50, (Math.random()-0.5)*120);
     geos.push(g);
   }
   let total = 0;
@@ -1076,10 +1158,10 @@ function createCloudGeo() {
   return out;
 }
 const clouds = [];
-for (let i = 0; i < 34; i++) {
+for (let i = 0; i < 38; i++) {
   const m = new THREE.Mesh(createCloudGeo(), cloudMat);
-  m.position.set(rand(-3200, 3200), rand(650, 1500), rand(-3200, 3200));
-  m.scale.setScalar(rand(0.8, 2.0));
+  m.position.set(rand(-3200, 3200), rand(700, 1600), rand(-3200, 3200));
+  m.scale.setScalar(rand(0.9, 2.1));
   scene.add(m); clouds.push(m);
 }
 
@@ -1122,17 +1204,16 @@ function spawnExplosion(pos) {
   fireballMat.opacity = 1;
   fireball.visible = true;
   fireballT = 0;
-
   for (let i = 0; i < MAX_SPARKS; i++) {
     const s = sparks[i];
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(2 * Math.random() - 1);
-    const speed = rand(30, 220);
+    const speed = rand(40, 260);
     s.x = pos.x; s.y = pos.y; s.z = pos.z;
     s.vx = Math.sin(phi) * Math.cos(theta) * speed;
     s.vy = Math.cos(phi) * speed;
     s.vz = Math.sin(phi) * Math.sin(theta) * speed;
-    s.life = rand(0.6, 1.6);
+    s.life = rand(0.7, 1.7);
     s.maxLife = s.life;
     const c = Math.random();
     if (c < 0.4)      { s.r = 1.0; s.g = 1.0; s.b = 0.85; }
@@ -1147,11 +1228,10 @@ function updateExplosion(dt) {
     const t = fireballT / 0.9;
     if (t >= 1) fireball.visible = false;
     else {
-      fireball.scale.setScalar(3 + t * 42);
+      fireball.scale.setScalar(3 + t * 48);
       fireballMat.opacity = 1 - t;
     }
   }
-
   let anyAlive = false;
   for (let i = 0; i < MAX_SPARKS; i++) {
     const s = sparks[i];
@@ -1166,7 +1246,6 @@ function updateExplosion(dt) {
     s.vy *= Math.exp(-1.8 * dt);
     s.vz *= Math.exp(-1.8 * dt);
     s.vy -= 60 * dt;
-
     const fade = s.life / s.maxLife;
     const fl = 0.4 + fade * 0.6;
     sparkPos[i*3]     = s.x;
@@ -1188,15 +1267,15 @@ function updateExplosion(dt) {
 const jet = {
   pos: new THREE.Vector3(0, 320, 0),
   yaw: 0, pitch: 0, roll: 0,
-  vy: 0, speed: 200,
-  throttle: 0.6,
+  vy: 0, speed: 100,
+  throttle: 0.5,
   boost: 100
 };
 
 const state = {
   phase: 'menu',
   score: 0,
-  best: Number(localStorage.getItem('skyrunner3d_best') || 0),
+  best: Number(localStorage.getItem('skyrunner3d_best2') || 0),
   multiplier: 1,
   travel: 0,
   invuln: 0,
@@ -1206,11 +1285,10 @@ const state = {
 };
 
 const visitedPOIs = new Set();
-
 const keys = Object.create(null);
 
 /* =========================================================
-   DOM REFS
+   DOM
    ========================================================= */
 const scoreEl  = document.getElementById('scoreEl');
 const bestEl   = document.getElementById('bestEl');
@@ -1250,7 +1328,7 @@ const thrFill = document.getElementById('thrFill');
 const thrKnob = document.getElementById('thrKnob');
 
 const joy = { id: null, x: 0, y: 0, cx: 0, cy: 0, radius: 55 };
-const thr = { id: null, value: 0.6 };
+const thr = { id: null, value: 0.5 };
 
 function refreshControlRects() {
   const jr = joyEl.getBoundingClientRect();
@@ -1321,10 +1399,7 @@ window.addEventListener('pointermove', e => {
 }, { passive: false });
 
 function endPointer(e) {
-  if (joy.id === e.pointerId) {
-    joy.id = null; joy.x = 0; joy.y = 0;
-    updateJoyKnob();
-  }
+  if (joy.id === e.pointerId) { joy.id = null; joy.x = 0; joy.y = 0; updateJoyKnob(); }
   if (thr.id === e.pointerId) thr.id = null;
 }
 window.addEventListener('pointerup', endPointer);
@@ -1345,12 +1420,18 @@ window.addEventListener('blur', () => {
 
 startBtn.addEventListener('click', startGame);
 
+/* ---------- Input helper with dead zone ---------- */
 function getJoystickInput() {
   let ix = joy.x, iy = joy.y;
   if (keys['a'] || keys['arrowleft'])  ix -= 1;
   if (keys['d'] || keys['arrowright']) ix += 1;
   if (keys['w'] || keys['arrowup'])    iy += 1;
   if (keys['s'] || keys['arrowdown'])  iy -= 1;
+
+  const DEAD = 0.12;
+  if (Math.abs(ix) < DEAD) ix = 0;
+  if (Math.abs(iy) < DEAD) iy = 0;
+
   ix = clamp(ix, -1, 1); iy = clamp(iy, -1, 1);
   const m = Math.hypot(ix, iy);
   if (m > 1) { ix /= m; iy /= m; }
@@ -1365,27 +1446,27 @@ function startGame() {
   state.score = 0;
   state.multiplier = 1;
   state.travel = 0;
-  state.invuln = 1.2;
+  state.invuln = 1.3;
   state.shake = 0;
   state.exploding = false;
   state.poiFound = 0;
   visitedPOIs.clear();
 
   const th = Math.max(terrainHeight(0, 0), 0);
-  jet.pos.set(0, th + 400, 0);
+  jet.pos.set(0, th + 380, 0);
   jet.yaw = 0; jet.pitch = 0; jet.roll = 0;
-  jet.vy = 0; jet.speed = 220;
+  jet.vy = 0; jet.speed = 100;
   jet.boost = 100;
-  jet.throttle = 0.6;
-  thr.value = 0.6;
+  jet.throttle = 0.5;
+  thr.value = 0.5;
   updateThrVisual();
 
   jetGroup.visible = true;
 
   camera.position.set(
-    jet.pos.x + Math.sin(jet.yaw) * 22,
-    jet.pos.y + 8,
-    jet.pos.z + Math.cos(jet.yaw) * 22
+    jet.pos.x + Math.sin(jet.yaw) * 24,
+    jet.pos.y + 9,
+    jet.pos.z + Math.cos(jet.yaw) * 24
   );
 
   overlay.classList.add('hide');
@@ -1396,7 +1477,7 @@ function gameOver() {
   state.phase = 'over';
   if (state.score > state.best) {
     state.best = state.score;
-    try { localStorage.setItem('skyrunner3d_best', String(state.best)); } catch (e) {}
+    try { localStorage.setItem('skyrunner3d_best2', String(state.best)); } catch (e) {}
   }
   title.textContent = 'FLIGHT ENDED';
   subtitle.innerHTML =
@@ -1411,9 +1492,9 @@ function gameOver() {
 function crash() {
   if (state.exploding) return;
   state.exploding = true;
-
   spawnExplosion(jet.pos.clone());
   jetGroup.visible = false;
+  jetShadow.visible = false;
 
   flashEl.style.opacity = '1';
   setTimeout(() => { flashEl.style.opacity = '0'; }, 240);
@@ -1422,21 +1503,20 @@ function crash() {
   state.multiplier = 1;
 
   setTimeout(() => {
-    const x = jet.pos.x + rand(-250, 250);
-    const z = jet.pos.z + rand(-250, 250);
+    const x = jet.pos.x + rand(-220, 220);
+    const z = jet.pos.z + rand(-220, 220);
     const th = Math.max(terrainHeight(x, z), 0);
-    jet.pos.set(x, th + 450, z);
-    jet.yaw = jet.yaw + rand(-0.4, 0.4);
+    jet.pos.set(x, th + 400, z);
+    jet.yaw = jet.yaw + rand(-0.35, 0.35);
     jet.pitch = 0; jet.roll = 0; jet.vy = 0;
-    jet.speed = 220;
+    jet.speed = 100;
     jetGroup.visible = true;
-    state.invuln = 2.2;
+    state.invuln = 2.0;
     state.exploding = false;
-
     camera.position.set(
-      jet.pos.x + Math.sin(jet.yaw) * 22,
-      jet.pos.y + 8,
-      jet.pos.z + Math.cos(jet.yaw) * 22
+      jet.pos.x + Math.sin(jet.yaw) * 24,
+      jet.pos.y + 9,
+      jet.pos.z + Math.cos(jet.yaw) * 24
     );
   }, 1700);
 }
@@ -1449,11 +1529,11 @@ function update(dt) {
 
   if (state.phase === 'play') {
     if (keys['e'] || keys['+'] || keys['=']) {
-      thr.value = Math.min(1, thr.value + dt * 0.55);
+      thr.value = Math.min(1, thr.value + dt * 0.5);
       updateThrVisual();
     }
     if (keys['q'] || keys['-']) {
-      thr.value = Math.max(0, thr.value - dt * 0.55);
+      thr.value = Math.max(0, thr.value - dt * 0.5);
       updateThrVisual();
     }
   }
@@ -1462,30 +1542,39 @@ function update(dt) {
   if (playing) {
     const input = getJoystickInput();
 
-    const PITCH_MAX = 0.75;
-    const ROLL_MAX  = 1.15;
+    /* ---- EASY / SLOW STEERING ---- */
+    const PITCH_MAX = 0.5;
+    const ROLL_MAX  = 0.72;
     const targetPitch = input.y * PITCH_MAX;
     const targetRoll  = input.x * ROLL_MAX;
 
-    const pk = 1 - Math.exp(-4.5 * dt);
-    const rk = 1 - Math.exp(-6.0 * dt);
+    const pk = 1 - Math.exp(-3.0 * dt);
+    const rk = 1 - Math.exp(-3.5 * dt);
     jet.pitch += (targetPitch - jet.pitch) * pk;
     jet.roll  += (targetRoll  - jet.roll)  * rk;
 
+    /* auto-level when idle */
+    if (Math.abs(input.x) < 0.08 && Math.abs(input.y) < 0.08) {
+      jet.pitch *= Math.exp(-1.8 * dt);
+      jet.roll  *= Math.exp(-1.5 * dt);
+    }
+
+    /* ---- SLOWER SPEEDS ---- */
     const boosting = !!keys['shift'] && jet.boost > 1;
-    const targetSpeed = (140 + jet.throttle * 360) * (boosting ? 1.65 : 1);
-    jet.speed += (targetSpeed - jet.speed) * (1 - Math.exp(-2.2 * dt));
+    const targetSpeed = (60 + jet.throttle * 190) * (boosting ? 1.32 : 1);
+    jet.speed += (targetSpeed - jet.speed) * (1 - Math.exp(-2.4 * dt));
 
-    if (boosting) jet.boost = Math.max(0, jet.boost - 26 * dt);
-    else          jet.boost = Math.min(100, jet.boost + 14 * dt);
+    if (boosting) jet.boost = Math.max(0, jet.boost - 24 * dt);
+    else          jet.boost = Math.min(100, jet.boost + 15 * dt);
 
-    const turnAuthority = clamp(jet.speed / 280, 0.35, 1.6);
-    jet.yaw -= jet.roll * 1.55 * turnAuthority * dt;
+    /* ---- GENTLER YAW COUPLING ---- */
+    const turnAuthority = clamp(jet.speed / 200, 0.5, 1.25);
+    jet.yaw -= jet.roll * 1.25 * turnAuthority * dt;
 
-    const liftLoss = Math.max(0, 1 - jet.speed / 190);
-    const targetVy = Math.sin(jet.pitch) * jet.speed * 1.5 - liftLoss * 220;
-    jet.vy += (targetVy - jet.vy) * (1 - Math.exp(-3.2 * dt));
-    jet.vy = clamp(jet.vy, -520, 520);
+    /* ---- NO GRAVITY (friendly) ---- */
+    const targetVy = Math.sin(jet.pitch) * jet.speed * 1.55;
+    jet.vy += (targetVy - jet.vy) * (1 - Math.exp(-3.0 * dt));
+    jet.vy = clamp(jet.vy, -420, 420);
 
     const horiz = jet.speed * Math.cos(jet.pitch * 0.75);
     const fwdX = -Math.sin(jet.yaw);
@@ -1505,29 +1594,49 @@ function update(dt) {
     state.travel += dist;
     state.score += Math.floor(dist * 0.05 * state.multiplier);
   } else if (state.phase === 'menu' || state.phase === 'over') {
-    jet.pos.z -= 200 * dt;
-    jet.pos.x += (Math.sin(performance.now() * 0.00013) * 180 - jet.pos.x) * (1 - Math.exp(-1.2 * dt));
-    jet.pos.y += (Math.max(terrainHeight(jet.pos.x, jet.pos.z), 0) + 400 - jet.pos.y) * (1 - Math.exp(-1.2 * dt));
+    jet.pos.z -= 150 * dt;
+    jet.pos.x += (Math.sin(performance.now() * 0.00013) * 160 - jet.pos.x) * (1 - Math.exp(-1.2 * dt));
+    jet.pos.y += (Math.max(terrainHeight(jet.pos.x, jet.pos.z), 0) + 380 - jet.pos.y) * (1 - Math.exp(-1.2 * dt));
     jet.pitch *= Math.exp(-2 * dt);
     jet.roll *= Math.exp(-2 * dt);
     jet.vy = 0;
-    state.travel += 200 * dt;
+    state.travel += 150 * dt;
   }
 
+  /* ---------- jet transform + fx ---------- */
   jetGroup.position.copy(jet.pos);
   jetGroup.rotation.set(jet.pitch, jet.yaw, -jet.roll);
 
-  const boosting = playing && !!keys['shift'] && jet.boost > 1;
+  const boostingFx = playing && !!keys['shift'] && jet.boost > 1;
   const fm = jetGroup.userData.flameMat;
-  const flen = 0.75 + Math.random() * 0.3 + (boosting ? 1.0 : 0);
+  const flen = 0.75 + Math.random() * 0.3 + (boostingFx ? 1.0 : 0);
   jetGroup.userData.flames.forEach(f => {
     f.scale.set(0.85 + Math.random() * 0.25, flen, 0.85 + Math.random() * 0.25);
   });
-  fm.color.setHex(boosting ? 0xa8f0ff : 0x6fe0ff);
-  fm.opacity = boosting ? 1 : 0.85;
+  fm.color.setHex(boostingFx ? 0xa8f0ff : 0x6fe0ff);
+  fm.opacity = boostingFx ? 1 : 0.85;
+  if (jetGroup.userData.glow) {
+    jetGroup.userData.glow.scale.setScalar(boostingFx ? 9 : 6);
+    jetGroup.userData.glow.material.color.setHex(boostingFx ? 0xa8f0ff : 0x6fe0ff);
+  }
 
-  const camDist = 22;
-  const camHeight = 8;
+  /* ---------- shadow ---------- */
+  const groundY = terrainHeight(jet.pos.x, jet.pos.z);
+  const altAbove = jet.pos.y - Math.max(groundY, 0);
+  if (altAbove > 0 && altAbove < 700) {
+    const sSize = 4 + altAbove * 0.028;
+    const sOp = Math.max(0, 0.55 - altAbove * 0.0007);
+    jetShadow.position.set(jet.pos.x, Math.max(groundY, 0) + 0.5, jet.pos.z);
+    jetShadow.scale.setScalar(sSize);
+    jetShadow.material.opacity = sOp;
+    jetShadow.visible = sOp > 0.02 && !state.exploding;
+  } else {
+    jetShadow.visible = false;
+  }
+
+  /* ---------- camera ---------- */
+  const camDist = 24;
+  const camHeight = 9;
   const camTarget = new THREE.Vector3(
     jet.pos.x + Math.sin(jet.yaw) * camDist,
     jet.pos.y + camHeight,
@@ -1565,10 +1674,10 @@ function update(dt) {
         Math.abs(c.position.x - jet.pos.x) > 3800) {
       c.position.set(
         jet.pos.x + rand(-3000, 3000),
-        rand(650, 1600),
+        rand(700, 1700),
         jet.pos.z + rand(-3000, 3000)
       );
-      c.scale.setScalar(rand(0.8, 2.0));
+      c.scale.setScalar(rand(0.9, 2.1));
     }
   }
 
@@ -1637,9 +1746,6 @@ function loop(now) {
   updateHUD(false);
 }
 
-/* =========================================================
-   RESIZE / BOOT
-   ========================================================= */
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -1650,11 +1756,9 @@ window.addEventListener('resize', onResize);
 
 function boot() {
   onResize();
-
   const th = Math.max(terrainHeight(0, 0), 0);
-  jet.pos.set(0, th + 400, 0);
+  jet.pos.set(0, th + 380, 0);
 
-  // Pre-build 5x5 spawn area
   const order = [];
   for (let dx = -2; dx <= 2; dx++)
     for (let dz = -2; dz <= 2; dz++)
